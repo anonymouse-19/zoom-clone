@@ -1,0 +1,22 @@
+# Root ignore rules. frontend/.gitignore adds the Next.js-specific ones.
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local database files (recreated by migrations + seed)
+*.db
+*.db-shm
+*.db-wal
+
+# Real environment values stay local; the .env.example templates are committed.
+.env
+.env.local
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/

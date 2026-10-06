@@ -1,0 +1,59 @@
+/*
+ * Global styles: loads Tailwind and declares the design tokens (Zoom's colours, radii,
+ * font). Every token below becomes a Tailwind class, e.g. --color-zoom-blue → bg-zoom-blue,
+ * text-zoom-blue, border-zoom-blue; --radius-tile → rounded-tile.
+ */
+@import "tailwindcss";
+
+@theme {
+  /* Brand colours, from the spec / Zoom Workplace web app. */
+  --color-zoom-blue: #0b5cff; /* primary buttons, Join/Schedule/Share tiles, links */
+  --color-zoom-blue-hover: #0a4ed9; /* a darker blue for hover */
+  --color-zoom-blue-soft: #ebf1ff; /* light blue background for selected/hovered items */
+  --color-zoom-orange: #ff742e; /* the "New meeting" tile */
+  --color-zoom-orange-hover: #f2621a;
+  --color-zoom-red: #e02828; /* End / Leave, destructive actions */
+  --color-zoom-red-hover: #c21f1f;
+  --color-zoom-green: #23d959; /* screen share, encryption shield, presence dot */
+
+  /* Light app chrome (dashboard, meetings pages). */
+  --color-ink: #131619; /* main text */
+  --color-ink-muted: #6e7680; /* secondary text: times, meeting IDs, hints */
+  --color-line: #e5e7eb; /* borders and dividers */
+  --color-canvas: #f7f8fa; /* subtle grey behind cards */
+
+  /* Dark meeting room. */
+  --color-room: #1a1a1a; /* room background */
+  --color-room-toolbar: #242424; /* bottom toolbar */
+  --color-room-tile: #2e2e2e; /* video tiles */
+
+  /* Shapes: Zoom's big rounded-square action tiles. */
+  --radius-tile: 20px;
+}
+
+/*
+ * `@theme inline` is for values that point at another CSS variable, which only exists at
+ * runtime. --font-inter is set by next/font in layout.tsx. This makes Tailwind's
+ * `font-sans` class resolve to Inter.
+ */
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  @apply bg-white font-sans text-ink antialiased;
+}
+
+/*
+ * Accessibility: people who ask their OS for reduced motion get (almost) no animation.
+ * Effects still finish instantly, so nothing gets stuck half-way.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
