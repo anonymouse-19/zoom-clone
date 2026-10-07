@@ -33,10 +33,24 @@ export function classifyMediaError(error: unknown): MediaErrorKind {
   return "unknown";
 }
 
+/** A phone's front camera ("user", facing you) or back camera ("environment"). */
+export type CameraFacing = "user" | "environment";
+
 /**
  * Constraints asking for one specific device, or the default one when `deviceId` is "".
  * `exact` means "this device or fail", instead of silently picking another.
+ * `facing` asks for the front or back camera instead (the phone's switch-camera button).
+ * It's a preference, not `exact`: a device with one camera simply keeps using it.
  */
-export function deviceConstraint(deviceId: string): MediaTrackConstraints | true {
-  return deviceId ? { deviceId: { exact: deviceId } } : true;
+export function deviceConstraint(
+  deviceId: string,
+  facing: CameraFacing | null = null,
+): MediaTrackConstraints | true {
+  if (deviceId) {
+    return { deviceId: { exact: deviceId } };
+  }
+  if (facing) {
+    return { facingMode: facing };
+  }
+  return true;
 }

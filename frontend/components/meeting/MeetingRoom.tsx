@@ -85,6 +85,7 @@ function LiveRoom({ session }: { session: MeetingSession }) {
   const isCameraOn = useRoomStore((state) => state.isCameraOn);
   const screenTrack = useRoomStore((state) => state.screenTrack);
   const cameraId = useRoomStore((state) => state.cameraId);
+  const cameraFacing = useRoomStore((state) => state.cameraFacing);
   const microphoneId = useRoomStore((state) => state.microphoneId);
   const speakerId = useRoomStore((state) => state.speakerId);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
@@ -101,6 +102,7 @@ function LiveRoom({ session }: { session: MeetingSession }) {
     isCameraOn: isCameraOn && hasMedia,
     cameraId,
     microphoneId,
+    cameraFacing,
   });
   useMediaErrorToasts(media.videoError, media.audioError);
   const devices = useMediaDevices(media.videoTrack !== null || media.audioTrack !== null);
@@ -207,6 +209,7 @@ function LiveRoom({ session }: { session: MeetingSession }) {
         meetingCode={session.meetingCode}
         meeting={meeting}
         isRecording={recording.isRecording}
+        canSwitchCamera={isCameraOn && devices.cameras.length > 1}
       />
       {status === "reconnecting" && (
         <p role="status" className="bg-zoom-orange py-1 text-center text-sm font-medium">
@@ -237,7 +240,9 @@ function LiveRoom({ session }: { session: MeetingSession }) {
           <RoomStage
             myParticipantId={session.participantId}
             localTracks={localTracks}
-            isMirrored={preferences.mirrorMyVideo}
+            // A mirror only makes sense for the front camera: with the back camera, the
+            // phone films what's in front of you, and mirrored text would read backwards.
+            isMirrored={preferences.mirrorMyVideo && cameraFacing !== "environment"}
             onStopSharing={screenShare.stopSharing}
           />
         </main>

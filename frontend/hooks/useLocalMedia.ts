@@ -11,7 +11,12 @@
 
 import { useEffect, useState } from "react";
 
-import { classifyMediaError, deviceConstraint, type MediaErrorKind } from "@/lib/media";
+import {
+  classifyMediaError,
+  deviceConstraint,
+  type CameraFacing,
+  type MediaErrorKind,
+} from "@/lib/media";
 
 type TrackKind = "audio" | "video";
 
@@ -21,10 +26,16 @@ type LocalTrackState = {
 };
 
 /**
- * One local track. While `isOn`, keeps a live track from `deviceId` ("" = default);
- * when turned off, or when the device changes, the old track is stopped.
+ * One local track. While `isOn`, keeps a live track from `deviceId` ("" = default, or the
+ * front/back camera given by `facing`); when turned off, or when the device changes, the
+ * old track is stopped first (phones can't keep two cameras open at once).
  */
-export function useLocalTrack(kind: TrackKind, isOn: boolean, deviceId: string): LocalTrackState {
+export function useLocalTrack(
+  kind: TrackKind,
+  isOn: boolean,
+  deviceId: string,
+  facing: CameraFacing | null = null,
+): LocalTrackState {
   const [state, setState] = useState<LocalTrackState>({ track: null, error: null });
 
   useEffect(() => {
@@ -39,7 +50,7 @@ export function useLocalTrack(kind: TrackKind, isOn: boolean, deviceId: string):
 
     async function acquire() {
       try {
-        const constraints = { [kind]: deviceConstraint(deviceId) };
+        const constraints = { [kind]: deviceConstraint(deviceId, facing) };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         acquiredTrack = stream.getTracks()[0];
         if (isCancelled) {
@@ -59,7 +70,7 @@ export function useLocalTrack(kind: TrackKind, isOn: boolean, deviceId: string):
       isCancelled = true;
       acquiredTrack?.stop();
     };
-  }, [kind, isOn, deviceId]);
+  }, [kind, isOn, deviceId, facing]);
 
   // When turned off, report "no track" right away (the effect cleanup has stopped it).
   return isOn ? state : { track: null, error: null };
@@ -71,8 +82,15 @@ export function useLocalMedia(options: {
   isMicOn: boolean;
   cameraId: string;
   microphoneId: string;
+  /** Front or back camera, when chosen with the switch-camera button. */
+  cameraFacing?: CameraFacing | null;
 }) {
-  const camera = useLocalTrack("video", options.isCameraOn, options.cameraId);
+  const camera = useLocalTrack(
+    "video",
+    options.isCameraOn,
+    options.cameraId,
+    options.cameraFacing ?? null,
+  );
   const microphone = useLocalTrack("audio", options.isMicOn, options.microphoneId);
   return {
     videoTrack: camera.track,

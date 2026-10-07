@@ -1,12 +1,21 @@
 /**
  * The top bar of the meeting room: the green shield (meeting information), title and
  * ID, the running time since the meeting started, a lock badge, the View menu
- * (Speaker / Gallery) and the fullscreen toggle.
+ * (Speaker / Gallery) and the fullscreen toggle. On phones, also Zoom's switch-camera
+ * button (front ↔ back); larger screens pick cameras from the toolbar's ^ menu instead.
  */
 
 "use client";
 
-import { Check, LayoutGrid, Lock, Maximize, Minimize, ShieldCheck } from "lucide-react";
+import {
+  Check,
+  LayoutGrid,
+  Lock,
+  Maximize,
+  Minimize,
+  ShieldCheck,
+  SwitchCamera,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
@@ -32,13 +41,21 @@ type RoomHeaderProps = {
   meeting: MeetingDetail | undefined;
   /** I'm recording this meeting to my computer (More → Record). */
   isRecording: boolean;
+  /** My camera is on and this device has more than one (a phone's front and back). */
+  canSwitchCamera: boolean;
 };
 
-export function RoomHeader({ meetingCode, meeting, isRecording }: RoomHeaderProps) {
+export function RoomHeader({
+  meetingCode,
+  meeting,
+  isRecording,
+  canSwitchCamera,
+}: RoomHeaderProps) {
   const now = useNow(ONE_SECOND_MS);
   const layout = useRoomStore((state) => state.layout);
   const setLayout = useRoomStore((state) => state.setLayout);
   const isLocked = useRoomStore((state) => state.isLocked);
+  const switchCamera = useRoomStore((state) => state.switchCamera);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
@@ -75,6 +92,17 @@ export function RoomHeader({ meetingCode, meeting, isRecording }: RoomHeaderProp
         {elapsed}
       </span>
       <div className="flex items-center gap-1">
+        {canSwitchCamera && (
+          <button
+            type="button"
+            onClick={switchCamera}
+            aria-label="Switch camera"
+            title="Switch camera"
+            className="rounded-md p-1.5 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-zoom-blue sm:hidden"
+          >
+            <SwitchCamera size={18} aria-hidden />
+          </button>
+        )}
         <Dropdown
           trigger={
             <span className="flex items-center gap-1.5">

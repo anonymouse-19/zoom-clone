@@ -17,6 +17,7 @@
 import { create } from "zustand";
 
 import type { ChatMessage } from "@/lib/api";
+import type { CameraFacing } from "@/lib/media";
 import type { ReactionEmoji, RoomSettings, RosterEntry, WaitingEntry } from "@/lib/roomProtocol";
 
 /**
@@ -76,6 +77,8 @@ type RoomState = {
   cameraId: string;
   microphoneId: string;
   speakerId: string;
+  /** Front or back camera, after the phone's switch-camera button (null = not used). */
+  cameraFacing: CameraFacing | null;
 };
 
 type EnterRoomDetails = Pick<
@@ -103,6 +106,8 @@ type RoomActions = {
   setScreenTrack: (track: MediaStreamTrack) => void;
   stopScreenShare: () => void;
   setCameraId: (deviceId: string) => void;
+  /** The phone's switch-camera button: front ↔ back. */
+  switchCamera: () => void;
   setMicrophoneId: (deviceId: string) => void;
   setSpeakerId: (deviceId: string) => void;
   reset: (myMedia: MyMediaChoices) => void;
@@ -134,6 +139,7 @@ const INITIAL_STATE: RoomState = {
   cameraId: "",
   microphoneId: "",
   speakerId: "",
+  cameraFacing: null,
 };
 
 export const useRoomStore = create<RoomState & RoomActions>()((set, get) => ({
@@ -229,7 +235,14 @@ export const useRoomStore = create<RoomState & RoomActions>()((set, get) => ({
     set({ screenTrack: null });
   },
 
-  setCameraId: (cameraId) => set({ cameraId }),
+  // Picking a camera by name replaces any front/back choice, and the other way round.
+  setCameraId: (cameraId) => set({ cameraId, cameraFacing: null }),
+
+  switchCamera: () => {
+    // The first press goes to the back camera: a phone starts on the front one.
+    const nextFacing = get().cameraFacing === "environment" ? "user" : "environment";
+    set({ cameraFacing: nextFacing, cameraId: "" });
+  },
 
   setMicrophoneId: (microphoneId) => set({ microphoneId }),
 

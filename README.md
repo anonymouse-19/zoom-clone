@@ -40,7 +40,7 @@ More: [schedule](docs/screenshots/schedule.png) ·
   the host allowed "join before host".
 - **In the meeting:**
   - **Video:** peer-to-peer (WebRTC), gallery and speaker views, speaking outline, mute
-    and stop video, in-room device menus.
+    and stop video, in-room device menus, and a switch-camera button (front/back) on phones.
   - **Talking together:** chat (to everyone or private), reactions, a raise-hand queue.
   - **Screen and recording:** screen sharing, local recording, Zoom's keyboard shortcuts
     and push-to-talk.
