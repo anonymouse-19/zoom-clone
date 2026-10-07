@@ -133,7 +133,7 @@ Full diagram and reasoning: [docs/SCHEMA.md](docs/SCHEMA.md).
 
 ## Run it locally
 
-**Prerequisites:** Node.js 20+, Python 3.11+ (developed on 3.13).
+**Prerequisites:** Node.js 22 (pinned in `frontend/package.json`), Python 3.11+ (developed on 3.13).
 
 ### 1. Backend (terminal 1)
 
