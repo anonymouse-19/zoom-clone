@@ -5,8 +5,7 @@ people with a link, and meet on video with chat, reactions, raise hand, screen s
 a waiting room and host controls, then get a summary of who attended and what was said.
 
 **Live demo:** _add your Vercel address here after deploying_ · **API:** _add your Render
-address here_ (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); the free backend may take
-~1 minute to wake up).
+address here_ (the free backend may take ~1 minute to wake up).
 
 **Demo account:** `alex.morgan@example.com` / `demo1234` (or click **Log in as the demo
 user** on the login page). You can also sign up with any email.
@@ -54,7 +53,7 @@ More: [schedule](docs/screenshots/schedule.png) ·
 
 ## Tech stack and why
 
-| Layer | Choice | Why (full reasoning in [docs/DECISIONS.md](docs/DECISIONS.md)) |
+| Layer | Choice | Why |
 |---|---|---|
 | Frontend | Next.js 16 (App Router), TypeScript (strict), Tailwind CSS v4 | File-based routing, typed props, Zoom's look from design tokens |
 | Server data | TanStack Query | Caching, loading/error states, and refreshing lists after a change |
@@ -82,7 +81,6 @@ meetings and joining, plus one WebSocket per person during a meeting. The server
 authenticates that WebSocket with a secret per-join token, keeps who's connected in
 memory, saves history (chat, attendance, host actions) in SQLite, and checks the
 sender's role for every host control. Video and audio don't touch the server.
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### How a call is set up (WebRTC signaling)
 
@@ -128,8 +126,6 @@ erDiagram
 - `auth_sessions` has one row per signed-in browser, holding only the SHA-256 of its token.
   `users.password_hash` holds a salted scrypt hash, never the password.
 - Times are stored in UTC. Foreign keys, CHECKs and UNIQUE codes are enforced by SQLite.
-
-Full diagram and reasoning: [docs/SCHEMA.md](docs/SCHEMA.md).
 
 ## Run it locally
 
@@ -199,7 +195,7 @@ Frontend on **Vercel**, backend on **Render** (its free web service supports Web
 re-seeds demo data when the free tier's disk is wiped. Set `NEXT_PUBLIC_API_URL`
 (`https://…`) and `NEXT_PUBLIC_WS_URL` (`wss://…`) on Vercel, and `CORS_ORIGINS` /
 `FRONTEND_URL` (the Vercel address) on Render. A TURN server is optional
-(`NEXT_PUBLIC_TURN_*`). **Step-by-step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).**
+(`NEXT_PUBLIC_TURN_*`).
 
 ## API
 
@@ -251,27 +247,62 @@ Beyond a plain clone, each one small and self-contained:
 | Local recording (tab + meeting sound + your mic → .webm) | Zoom local recording | Real recording without a media server |
 
 Skipped on purpose (more code and risk than value for a demo): live captions,
-network-quality bars, background blur ([DECISIONS D-080](docs/DECISIONS.md)).
+network-quality bars, background blur.
 
 ## Security
 
 A review with Cloudflare's security-audit checklists found and fixed 7 issues, the
-worst being that a meeting's ID alone revealed its passcode. Findings, fixes, what still
-needs checking on the live deployment, and what was checked and found safe:
-[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md).
+worst being that a meeting's ID alone revealed its passcode. The fixes are covered by
+`backend/tests/test_security.py`.
 
-## Assumptions
+## Assumptions / Mocked Data / Notes
+
+### Assumptions
 
 - **Accounts are for hosts:** you need one to host, schedule and see your meetings. Anyone
   joining by ID or link is an anonymous guest who needs the invite token or the passcode.
-- **No email sending:** so no email verification and no "forgot password".
 - **Mesh video:** every browser connects to every other. Good up to about 6 people.
 - **One backend instance:** who's in which meeting is kept in that server's memory.
-- **Recording is local only:** the file downloads to the person recording.
-- **STUN only by default:** add a TURN server for strict networks.
 - **Recurring meetings** are a label ("every week") with one meeting ID, like Zoom's.
-- **On the free tier**, the database resets on each deploy or restart; the demo data
-  comes back by itself.
+- **Times** are stored in UTC and shown in a chosen time zone (the account's time zone
+  by default, changeable when scheduling).
+- **Browsers:** built and tested in Chromium-based browsers (Chrome, Edge); the automated
+  test runs Chromium. Camera and microphone need HTTPS or `localhost`.
+
+### Mocked data
+
+- **Demo data is seeded on first start** ([`backend/app/seed_data.py`](backend/app/seed_data.py)):
+  4 made-up colleagues (Alex Morgan, Priya Sharma, Daniel Kim, Sofia Rossi, all
+  `@example.com`, password `demo1234`), each with a personal room; 7 upcoming meetings
+  (one always later today); and 10 past meetings with attendance, chat and two guests,
+  so the dashboard, Meetings page and summaries have something to show.
+- Seeded times are relative to when the server starts ("tomorrow 9:30"), so the data
+  never goes stale.
+- Seeded accounts count as email-verified; new sign-ups don't (see below).
+
+### What is simplified or not real
+
+- **No email is sent.** Invitees are stored and an invitation text is generated to copy
+  and paste. So there's no email verification and no "forgot password". Because an
+  address is never proven, a new account doesn't see meetings it was invited to by email.
+- **Recording is local only:** the `.webm` downloads to the person recording; no cloud
+  recording.
+- **Calendar** is a `.ics` download and a Google Calendar link, not a calendar API sync.
+- **Mute is cooperative:** the host's mute is carried out by the guest's browser (with
+  a mesh there's no media server to enforce it).
+- **STUN only by default:** calls between some strict networks need a TURN server
+  (`NEXT_PUBLIC_TURN_*`).
+
+### Notes for reviewers
+
+- **Quickest test:** log in with **Log in as the demo user**, click **New meeting**, then
+  open the invite link in a second tab and join as a guest. The two tabs see each other.
+- **The free backend sleeps** after 15 minutes idle; the first request may take about a
+  minute.
+- **The free tier's database resets** on each deploy or restart; the demo data comes
+  back by itself.
+- **Checks:** `pytest` (171 tests), Ruff, ESLint, TypeScript, Prettier and a two-browser
+  Playwright test all pass (commands under [Quality checks](#quality-checks)).
 
 ## Known limitations and what I'd do next
 
@@ -335,7 +366,7 @@ frontend/   Next.js app
   lib/               api.ts, roomConnection.ts, peerLink.ts, roomProtocol.ts, formatting, ...
   stores/            roomStore.ts (Zustand)
   e2e/               Playwright smoke test
-docs/       interview guide, decisions, concepts, architecture, schema, deployment, log
+docs/       screenshots used in this README
 render.yaml backend deployment (Render free tier)
 ```
 
@@ -348,23 +379,8 @@ render.yaml backend deployment (Render free tier)
 - **Layers (backend):** routers stay thin; rules live in `services/`; tables in `models/`;
   the live room in `realtime/` (each message type has one handler function).
 - **One API client (frontend):** only `frontend/lib/api.ts` calls `fetch` for REST.
-- **`INTERVIEW:` comments** mark the decisions most worth understanding; they're indexed
-  in [docs/INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md).
+- **`INTERVIEW:` comments** mark the decisions most worth understanding.
 - **Schema changes:** edit the model, `alembic revision --autogenerate -m "..."`, *read*
   the generated file, then `alembic upgrade head`. `pytest` fails if models and
   migrations drift apart.
 - **Tests read as sentences**, and each test file starts with the list of behaviors it proves.
-
-## Documentation
-
-| File | What it's for |
-|---|---|
-| [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | The security review: findings, fixes, open checks |
-| [docs/INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md) | The app in plain words, pitch, walkthroughs, 100+ Q&As, failure scenarios |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Every library and architectural choice, with alternatives and trade-offs |
-| [docs/CONCEPTS.md](docs/CONCEPTS.md) | Plain-English glossary with code locations |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System, signaling, waiting room and code-structure diagrams |
-| [docs/SCHEMA.md](docs/SCHEMA.md) | ER diagram and table rationale |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Free-tier deployment, step by step |
-| [docs/LEARNING_LOG.md](docs/LEARNING_LOG.md) | What was built each phase, and the bugs hit along the way |
-| [docs/COMPREHENSION_QUESTIONS.md](docs/COMPREHENSION_QUESTIONS.md) | Self-check questions per phase |
