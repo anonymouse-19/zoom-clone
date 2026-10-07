@@ -8,6 +8,9 @@ a waiting room and host controls, then get a summary of who attended and what wa
 address here_ (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); the free backend may take
 ~1 minute to wake up).
 
+**Demo account:** `alex.morgan@example.com` / `demo1234` (or click **Log in as the demo
+user** on the login page). You can also sign up with any email.
+
 | Dashboard | Meeting (participants panel, raised hand, reaction) |
 |---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Meeting](docs/screenshots/meeting-participants.png) |
@@ -23,6 +26,8 @@ More: [schedule](docs/screenshots/schedule.png) ·
 
 ## Features
 
+- **Accounts:** sign up, log in and sign out (email + password). Hosting and scheduling
+  need an account; joining by link doesn't, as in Zoom.
 - **Dashboard:** New meeting (with your Personal Meeting ID option), Join, Schedule, Share
   screen; a live clock; upcoming meetings with a "Starts in 5 min" nudge; recent meetings.
 - **Meetings page:** upcoming, previous and personal room; edit, cancel, copy invitation,
@@ -31,7 +36,8 @@ More: [schedule](docs/screenshots/schedule.png) ·
   room, video and mute options, invitees) → an invitation ready to copy.
 - **Join:** paste any meeting ID or link (or click "Paste meeting link from clipboard"); a
   pre-join screen with camera preview, mic level meter, device pickers and Test speaker;
-  "waiting for the host" until it starts.
+  "waiting for the host" (with the scheduled time) until it starts, or straight in when
+  the host allowed "join before host".
 - **In the meeting:**
   - **Video:** peer-to-peer (WebRTC), gallery and speaker views, speaking outline, mute
     and stop video, in-room device menus.
@@ -56,7 +62,8 @@ More: [schedule](docs/screenshots/schedule.png) ·
 | Backend | Python, FastAPI, Pydantic v2 | Typed validation, WebSockets built in, auto-generated API docs |
 | Realtime | FastAPI WebSockets + browser WebRTC (mesh) | Video goes browser to browser; the server only relays setup messages and room events |
 | Database | SQLite via SQLAlchemy 2.0 + Alembic | Zero setup; typed models; versioned, reviewable migrations |
-| Tests & tooling | pytest (136 tests), Playwright, Ruff, ESLint, Prettier | One linter and formatter per language; a real-browser smoke test |
+| Auth | Email + password (scrypt), random session tokens stored hashed | No extra dependency; "Sign out" really ends the session |
+| Tests & tooling | pytest (171 tests), Playwright, Ruff, ESLint, Prettier | One linter and formatter per language; a real-browser smoke test |
 
 ## Architecture
 
@@ -102,6 +109,7 @@ and impolite peers) settles the rare case of two offers crossing later on.
 
 ```mermaid
 erDiagram
+    users ||--o{ auth_sessions : "signed in as"
     users ||--o{ meetings : hosts
     meetings ||--|| meeting_settings : "has one"
     meetings ||--o{ meeting_invitees : invites
@@ -117,6 +125,8 @@ erDiagram
 - Chat references participants, not users, so guests can chat. A private message's
   recipient uses `ON DELETE CASCADE` so it can never turn public.
 - `meeting_events` is an append-only audit log (joins, leaves, host actions).
+- `auth_sessions` has one row per signed-in browser, holding only the SHA-256 of its token.
+  `users.password_hash` holds a salted scrypt hash, never the password.
 - Times are stored in UTC. Foreign keys, CHECKs and UNIQUE codes are enforced by SQLite.
 
 Full diagram and reasoning: [docs/SCHEMA.md](docs/SCHEMA.md).
@@ -139,8 +149,9 @@ alembic upgrade head            # create/upgrade the tables in zoom_clone.db
 uvicorn app.main:app --reload --port 8000
 ```
 
-On first start the server fills the empty database with demo data (the default user
-Alex Morgan, colleagues, upcoming and past meetings). To start over, delete
+On first start the server fills the empty database with demo data (the demo account
+Alex Morgan, colleagues, upcoming and past meetings; every demo account's password is
+`demo1234`). To start over, delete
 `zoom_clone.db*` and run `alembic upgrade head` again. Interactive API docs:
 <http://localhost:8000/docs>.
 
@@ -153,14 +164,16 @@ cp .env.example .env.local      # optional: defaults point at localhost:8000
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000> and log in (the login page has a **Log in as the demo user**
+button), or sign up.
 
 ### Try a meeting with yourself
 
-There's no login, so every tab is Alex, but a meeting has two "doors":
-1. **Tab 1 (host):** Home → **New meeting**.
+Hosts need an account; guests don't. A meeting has two "doors":
+1. **Tab 1 (host):** log in, then Home → **New meeting**.
 2. **Tab 2 (guest):** in the meeting, Participants → **Invite** copies the invitation.
-   Open its link in a new tab, type another name, and **Join**.
+   Open its link in a new tab (or a private window, signed out), type another name, and
+   **Join**. A join through the link is always a guest, even in a signed-in browser.
 
 Each tab keeps its own join ticket (sessionStorage), so the two tabs are two participants
 and see each other's video. (On Windows, some camera drivers allow only one *browser* at a
@@ -170,7 +183,7 @@ time: use two tabs of the same browser.)
 
 ```bash
 # backend/
-pytest                 # 136 tests: models, API, join rules, the WebSocket room, host controls
+pytest                 # 171 tests: models, API, accounts, join rules, the room, host controls, security
 ruff check . && ruff format --check .
 
 # frontend/
@@ -190,11 +203,18 @@ re-seeds demo data when the free tier's disk is wiped. Set `NEXT_PUBLIC_API_URL`
 
 ## API
 
-Interactive docs at <http://localhost:8000/docs> when the backend is running.
+Interactive docs at <http://localhost:8000/docs> when the backend is running. Signed-in
+routes need `Authorization: Bearer <token>` (the docs page's **Authorize** button). Guests
+need no account to look up a meeting and join it. A meeting's details, `.ics`, summary and
+chat history are only for its host, signed-in users it involves, and guests sending their
+join ticket as `X-Session-Token`. Too many wrong passwords or passcodes give 429.
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/me` | The logged-in (seeded) user |
+| POST | `/api/auth/signup` | Create an account; returns a sign-in token → 201 |
+| POST | `/api/auth/login` | Email + password → a sign-in token (401 if wrong) |
+| POST | `/api/auth/logout` | End this browser's session → 204 |
+| GET | `/api/me` | The signed-in user (401 without a valid token) |
 | GET | `/api/meetings?scope=upcoming\|recent\|all` | Meetings I host, am invited to, or attended |
 | POST | `/api/meetings/instant` | Start a meeting now (or my personal room) → 201 |
 | POST | `/api/meetings` | Schedule a meeting → 201 |
@@ -233,10 +253,18 @@ Beyond a plain clone, each one small and self-contained:
 Skipped on purpose (more code and risk than value for a demo): live captions,
 network-quality bars, background blur ([DECISIONS D-080](docs/DECISIONS.md)).
 
+## Security
+
+A review with Cloudflare's security-audit checklists found and fixed 7 issues, the
+worst being that a meeting's ID alone revealed its passcode. Findings, fixes, what still
+needs checking on the live deployment, and what was checked and found safe:
+[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md).
+
 ## Assumptions
 
-- **No login:** the seeded user "Alex Morgan" (id 1) is always signed in. Anyone joining by
-  ID or link is an anonymous guest who needs the invite token or the passcode.
+- **Accounts are for hosts:** you need one to host, schedule and see your meetings. Anyone
+  joining by ID or link is an anonymous guest who needs the invite token or the passcode.
+- **No email sending:** so no email verification and no "forgot password".
 - **Mesh video:** every browser connects to every other. Good up to about 6 people.
 - **One backend instance:** who's in which meeting is kept in that server's memory.
 - **Recording is local only:** the file downloads to the person recording.
@@ -251,8 +279,8 @@ network-quality bars, background blur ([DECISIONS D-080](docs/DECISIONS.md)).
   once and meetings can hold dozens of people. Hosts could then also *enforce* a mute.
 - **More than one server:** Redis pub/sub to share room messages between backend
   instances, and Postgres instead of a SQLite file.
-- **Real accounts:** OAuth or email login. `get_current_user` is the single place it
-  plugs in. That would also allow banning removed people.
+- **Accounts:** login rate limiting, password reset by email, "Sign in with Google",
+  and banning removed people by account.
 - **Security:** end-to-end encryption (WebRTC insertable streams) and short-lived TURN
   credentials issued by the backend.
 - **Product:** captions, cloud recording, breakout rooms, automatically passing the host
@@ -280,6 +308,10 @@ network-quality bars, background blur ([DECISIONS D-080](docs/DECISIONS.md)).
    the room: socket, reconnecting, one WebRTC link per person, store updates.
 10. [`frontend/lib/peerLink.ts`](frontend/lib/peerLink.ts): one WebRTC connection: who
     calls whom, perfect negotiation, swapping tracks.
+
+Accounts: [`backend/app/deps.py`](backend/app/deps.py) (`get_current_user`) and
+[`backend/app/services/auth_service.py`](backend/app/services/auth_service.py), then
+[`frontend/hooks/useAuth.ts`](frontend/hooks/useAuth.ts).
 
 ## Project structure
 
@@ -327,6 +359,7 @@ render.yaml backend deployment (Render free tier)
 
 | File | What it's for |
 |---|---|
+| [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | The security review: findings, fixes, open checks |
 | [docs/INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md) | The app in plain words, pitch, walkthroughs, 100+ Q&As, failure scenarios |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every library and architectural choice, with alternatives and trade-offs |
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | Plain-English glossary with code locations |

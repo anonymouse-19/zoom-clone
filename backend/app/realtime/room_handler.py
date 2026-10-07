@@ -58,6 +58,11 @@ from app.realtime.room_manager import RoomManager, RoomMember
 from app.services import room_service
 from app.services.errors import ServiceError
 
+# The largest message the room accepts. WebRTC offers are a few KB; nothing legitimate
+# comes close. (The server also caps it before reading, with uvicorn's --ws-max-size in
+# render.yaml: this check is the same limit for any other way the app is run.)
+MAX_MESSAGE_CHARACTERS = 64 * 1024
+
 MessageHandler = Callable[[RoomContext, RoomMember, Any], Awaitable[None]]
 
 # Which function handles each kind of message. Adding a feature = a message class in
@@ -149,6 +154,9 @@ async def _handle_messages(context: RoomContext, member: RoomMember) -> None:
     WebSocketDisconnect out of receive_text(), which ends the loop too."""
     while not member.has_left_on_purpose:
         text = await member.websocket.receive_text()
+        if len(text) > MAX_MESSAGE_CHARACTERS:
+            await context.send_error(member, "That message is too large")
+            continue
         try:
             message = CLIENT_MESSAGE_PARSER.validate_json(text)
         except ValidationError:

@@ -55,6 +55,43 @@ def get_meeting_by_code(db: Session, meeting_code: str) -> Meeting:
     return meeting
 
 
+def get_meeting_for_viewer(
+    db: Session, meeting_code: str, *, user: User | None, join_ticket: str | None
+) -> Meeting:
+    """The meeting, for someone allowed to see its private parts (passcode, invite link,
+    invitees, chat, attendance). That's the host, a signed-in user the meeting involves,
+    or a browser holding a join ticket for it (a guest who joined). 403 for anyone else.
+
+    INTERVIEW: knowing a meeting's ID must not be enough. Otherwise anyone who was told
+    the ID could read the passcode here, and the passcode would protect nothing.
+    """
+    meeting = get_meeting_by_code(db, meeting_code)
+    if user is not None and is_involved(meeting, user):
+        return meeting
+    if join_ticket is not None and _holds_join_ticket(db, meeting, join_ticket):
+        return meeting
+    raise ForbiddenError("Only the host and people in this meeting can see its details")
+
+
+def is_involved(meeting: Meeting, user: User) -> bool:
+    """Hosts it, joined it with their account, or (verified email only) was invited."""
+    if meeting.host_id == user.id:
+        return True
+    if any(participant.user_id == user.id for participant in meeting.participants):
+        return True
+    return user.email_verified and any(invitee.email == user.email for invitee in meeting.invitees)
+
+
+def _holds_join_ticket(db: Session, meeting: Meeting, join_ticket: str) -> bool:
+    """True if `join_ticket` is the session token of one of this meeting's join sessions."""
+    participant_id = db.scalar(
+        select(Participant.id).where(
+            Participant.meeting_id == meeting.id, Participant.session_token == join_ticket
+        )
+    )
+    return participant_id is not None
+
+
 def require_host(meeting: Meeting, user: User) -> None:
     """Stop here unless `user` hosts `meeting`.
 
@@ -240,13 +277,22 @@ def start_meeting(db: Session, meeting_code: str, user: User) -> Meeting:
     if meeting.status != MeetingStatus.SCHEDULED:
         raise ConflictError(f"This meeting can't be started because it is {meeting.status}")
 
+    mark_started(meeting)
+    db.commit()
+    return meeting
+
+
+def mark_started(meeting: Meeting) -> None:
+    """Make a scheduled meeting (or an idle personal room) live. The caller commits.
+
+    Used when the host starts it, and when a guest joins before the host because the
+    host allowed that ("join before host").
+    """
     now = utc_now()
     meeting.status = MeetingStatus.LIVE
     meeting.started_at = now
     meeting.ended_at = None  # a reused personal room may have an old end time
     meeting.events.append(MeetingEvent(event_type=MeetingEventType.MEETING_STARTED, created_at=now))
-    db.commit()
-    return meeting
 
 
 def end_meeting(db: Session, meeting_code: str, user: User) -> Meeting:
@@ -257,11 +303,13 @@ def end_meeting(db: Session, meeting_code: str, user: User) -> Meeting:
     return meeting
 
 
-def finish_meeting(db: Session, meeting: Meeting) -> None:
+def finish_meeting(db: Session, meeting: Meeting, *, can_start_again: bool = False) -> None:
     """End a live meeting: everyone in it has left, anyone still waiting never got in.
 
     Shared by end_meeting (REST, checks the host's account) and the meeting room (checks
     the participant's in-meeting role, since a guest can be handed the host role).
+    `can_start_again`: go back to "waiting for the host" instead of "ended" (used when
+    guests who joined before the host all left before the host came).
     """
     if meeting.status != MeetingStatus.LIVE:
         raise ConflictError("This meeting isn't in progress")
@@ -277,7 +325,10 @@ def finish_meeting(db: Session, meeting: Meeting) -> None:
     meeting.ended_at = now
     # A personal room goes back to idle so its permanent link keeps working.
     is_personal_room = meeting.type == MeetingType.PERSONAL
-    meeting.status = MeetingStatus.SCHEDULED if is_personal_room else MeetingStatus.ENDED
+    if is_personal_room or can_start_again:
+        meeting.status = MeetingStatus.SCHEDULED
+    else:
+        meeting.status = MeetingStatus.ENDED
     meeting.events.append(MeetingEvent(event_type=MeetingEventType.MEETING_ENDED, created_at=now))
     db.commit()
 
@@ -303,18 +354,17 @@ def _meetings_involving(user: User) -> Select[tuple[Meeting]]:
     one extra query each. Without it, reading `meeting.host` in a loop would fire one
     query per meeting (the "N+1 queries" problem).
     """
-    invited_meeting_ids = select(MeetingInvitee.meeting_id).where(
-        MeetingInvitee.email == user.email.lower()
-    )
     attended_meeting_ids = select(Participant.meeting_id).where(Participant.user_id == user.id)
-    is_involved = or_(
-        Meeting.host_id == user.id,
-        Meeting.id.in_(invited_meeting_ids),
-        Meeting.id.in_(attended_meeting_ids),
-    )
+    conditions = [Meeting.host_id == user.id, Meeting.id.in_(attended_meeting_ids)]
+    # Invitations count only for a verified email (see User.email_verified).
+    if user.email_verified:
+        invited_meeting_ids = select(MeetingInvitee.meeting_id).where(
+            MeetingInvitee.email == user.email
+        )
+        conditions.append(Meeting.id.in_(invited_meeting_ids))
     return (
         select(Meeting)
-        .where(is_involved, Meeting.type != MeetingType.PERSONAL)
+        .where(or_(*conditions), Meeting.type != MeetingType.PERSONAL)
         .options(selectinload(Meeting.host), selectinload(Meeting.participants))
     )
 

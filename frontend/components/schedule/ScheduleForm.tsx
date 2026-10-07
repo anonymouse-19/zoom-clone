@@ -267,7 +267,13 @@ export function ScheduleForm({ user, editingMeeting }: ScheduleFormProps) {
             />
             <CheckboxField
               label="Allow participants to join before host"
-              isChecked={values.isJoinBeforeHostOn}
+              description={
+                values.isWaitingRoomOn
+                  ? "Not available with a waiting room: people wait for you to admit them."
+                  : "Participants can meet without you; the meeting starts when the first one joins."
+              }
+              isChecked={values.isJoinBeforeHostOn && !values.isWaitingRoomOn}
+              isDisabled={values.isWaitingRoomOn}
               onChange={(isChecked) => update("isJoinBeforeHostOn", isChecked)}
             />
           </div>
@@ -342,15 +348,23 @@ type CheckboxFieldProps = {
   label: string;
   description?: string;
   isChecked: boolean;
+  isDisabled?: boolean;
   onChange: (isChecked: boolean) => void;
 };
 
-function CheckboxField({ label, description, isChecked, onChange }: CheckboxFieldProps) {
+function CheckboxField({
+  label,
+  description,
+  isChecked,
+  isDisabled = false,
+  onChange,
+}: CheckboxFieldProps) {
   return (
-    <label className="flex items-start gap-2 text-sm">
+    <label className={`flex items-start gap-2 text-sm ${isDisabled ? "opacity-60" : ""}`}>
       <input
         type="checkbox"
         checked={isChecked}
+        disabled={isDisabled}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-0.5 h-4 w-4 accent-zoom-blue"
       />

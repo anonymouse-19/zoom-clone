@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ChatMessage, Meeting, Participant, User
 from app.models.enums import MeetingStatus, MeetingType, ParticipantStatus
-from tests.factories import make_meeting, make_participant, make_user
+from tests.factories import make_meeting, make_participant
 
 START = datetime(2030, 5, 1, 9, 30, tzinfo=UTC)
 
@@ -135,7 +135,7 @@ def test_a_meeting_that_never_started_has_no_summary(
 def test_chat_history_contains_only_public_messages(
     client: TestClient, db_session: Session, me: User
 ) -> None:
-    meeting = make_meeting(db_session, make_user(db_session), status=MeetingStatus.LIVE)
+    meeting = make_meeting(db_session, me, status=MeetingStatus.LIVE)  # I host it
     meeting.started_at = START
     sender = make_participant(db_session, meeting, display_name="Sam", joined_at=START)
     receiver = make_participant(db_session, meeting, display_name="Kai", joined_at=START)

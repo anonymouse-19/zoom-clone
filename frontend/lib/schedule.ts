@@ -168,7 +168,8 @@ export function toScheduleInput(values: ScheduleFormValues): ScheduleMeetingInpu
       video_on_entry_participant: values.isParticipantVideoOn,
       waiting_room_enabled: values.isWaitingRoomOn,
       mute_on_entry: values.isMuteOnEntryOn,
-      allow_join_before_host: values.isJoinBeforeHostOn,
+      // A waiting room overrides "join before host" (the server applies the same rule).
+      allow_join_before_host: values.isJoinBeforeHostOn && !values.isWaitingRoomOn,
     },
     invitees: values.invitees,
   };

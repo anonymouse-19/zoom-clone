@@ -16,6 +16,7 @@ Accepted inputs (all resolve to the same meeting):
 """
 
 import re
+import secrets
 from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import parse_qs, urlsplit
@@ -132,9 +133,11 @@ def join_state_for(meeting: Meeting, *, as_host: bool) -> JoinState:
     if meeting.status == MeetingStatus.LIVE:
         return JoinState.READY
 
-    # Not started yet. The host can always go in (joining starts the meeting); guests
-    # only if the host allowed "join before host".
-    if as_host or meeting.settings.allow_join_before_host:
+    # Not started yet. The host can always go in (joining starts the meeting). Guests
+    # only if the host allowed "join before host", and there's no waiting room: someone
+    # has to admit people from a waiting room, and before the host arrives nobody can.
+    settings = meeting.settings
+    if as_host or (settings.allow_join_before_host and not settings.waiting_room_enabled):
         return JoinState.READY
     return JoinState.WAITING_FOR_HOST
 
@@ -147,12 +150,24 @@ def has_valid_credential(
     INTERVIEW: invite links carry a random token instead of the passcode, so the
     passcode itself never sits in links, chat logs or browser history.
     """
-    token_matches = invite_token is not None and invite_token == meeting.invite_token
-    passcode_matches = passcode is not None and passcode == meeting.passcode
-    return token_matches or passcode_matches
+    return invite_token_matches(meeting, invite_token) or passcode_matches(meeting, passcode)
 
 
-def resolve_join_input(db: Session, raw_input: str, user: User) -> JoinCheck:
+def invite_token_matches(meeting: Meeting, invite_token: str | None) -> bool:
+    return invite_token is not None and _same_secret(invite_token, meeting.invite_token)
+
+
+def passcode_matches(meeting: Meeting, passcode: str | None) -> bool:
+    return passcode is not None and _same_secret(passcode, meeting.passcode)
+
+
+def _same_secret(given: str, expected: str) -> bool:
+    """Compare in constant time, so response timing reveals nothing about how close a
+    guess was. (Encoded to bytes: compare_digest refuses non-ASCII strings.)"""
+    return secrets.compare_digest(given.encode(), expected.encode())
+
+
+def resolve_join_input(db: Session, raw_input: str, user: User | None) -> JoinCheck:
     """Steps 1 + 2 together: what GET /api/meetings/resolve returns."""
     parsed = parse_join_input(raw_input)
     if parsed is None:
@@ -162,12 +177,12 @@ def resolve_join_input(db: Session, raw_input: str, user: User) -> JoinCheck:
     if meeting is None:
         return JoinCheck(state=JoinState.NOT_FOUND, meeting=None, passcode_required=False)
 
-    has_credential = has_valid_credential(
-        meeting, invite_token=parsed.invite_token, passcode=parsed.passcode
-    )
+    # Only the invite token is checked here, never a passcode: this lookup has no
+    # guessing limit, so answering "that passcode is right" would let anyone try
+    # passcodes here without limit. Passcodes are checked when joining, which is limited.
     return JoinCheck(
         state=join_state_for(meeting, as_host=False),
         meeting=meeting,
-        passcode_required=not has_credential,
-        you_are_host=meeting.host_id == user.id,
+        passcode_required=not invite_token_matches(meeting, parsed.invite_token),
+        you_are_host=user is not None and meeting.host_id == user.id,
     )

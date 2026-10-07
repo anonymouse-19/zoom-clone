@@ -12,10 +12,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import * as api from "@/lib/api";
+import { getAuthToken } from "@/lib/authToken";
 
 // Upcoming lists refresh every minute, so "starting soon" states don't go stale while the
 // dashboard sits open.
 const UPCOMING_REFRESH_MS = 60_000;
+const UNAUTHORIZED = 401;
 // While a guest waits for the host, ask the server again this often. A WebSocket push
 // would be instant, but polling a cheap endpoint every few seconds is simpler, and the
 // guest isn't in the meeting's WebSocket room yet.
@@ -32,13 +34,31 @@ export const queryKeys = {
   summary: (meetingCode: string) => ["summary", meetingCode] as const,
 };
 
+/**
+ * The signed-in user, or `null` for a guest (no token, or the server refused it).
+ * `undefined` only while it's loading. Logging in or out replaces it (hooks/useAuth.ts).
+ */
 export function useCurrentUser() {
   return useQuery({
     queryKey: queryKeys.me,
-    queryFn: api.getMe,
-    // The user doesn't change during a session (no login), so fetch once.
+    queryFn: fetchCurrentUser,
+    // Who is signed in only changes by logging in or out, which update this directly.
     staleTime: Infinity,
   });
+}
+
+async function fetchCurrentUser(): Promise<api.User | null> {
+  if (getAuthToken() === null) {
+    return null; // not signed in: no need to ask the server
+  }
+  try {
+    return await api.getMe();
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === UNAUTHORIZED) {
+      return null; // the token was refused (and lib/api.ts has already forgotten it)
+    }
+    throw error;
+  }
 }
 
 export function useMeetings(scope: api.MeetingScope) {
@@ -49,20 +69,23 @@ export function useMeetings(scope: api.MeetingScope) {
   });
 }
 
-/** One meeting's details. `isEnabled: false` skips fetching (e.g. Schedule in "new" mode). */
-export function useMeeting(meetingCode: string, isEnabled = true) {
+/**
+ * One meeting's details. `isEnabled: false` skips fetching (e.g. Schedule in "new" mode).
+ * `joinTicket`: a guest's proof of being in the meeting (the room passes it).
+ */
+export function useMeeting(meetingCode: string, isEnabled = true, joinTicket?: string) {
   return useQuery({
     queryKey: queryKeys.meeting(meetingCode),
-    queryFn: () => api.getMeeting(meetingCode),
+    queryFn: () => api.getMeeting(meetingCode, joinTicket),
     enabled: isEnabled,
   });
 }
 
 /** The post-meeting recap: attendance and chat (GET /api/meetings/{code}/summary). */
-export function useMeetingSummary(meetingCode: string) {
+export function useMeetingSummary(meetingCode: string, joinTicket?: string) {
   return useQuery({
     queryKey: queryKeys.summary(meetingCode),
-    queryFn: () => api.getMeetingSummary(meetingCode),
+    queryFn: () => api.getMeetingSummary(meetingCode, joinTicket),
   });
 }
 

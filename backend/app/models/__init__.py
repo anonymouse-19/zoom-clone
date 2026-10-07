@@ -5,6 +5,7 @@ Alembic and the tests rely on this: a model file that is never imported is invis
 them, and its table would silently be missing from migrations.
 """
 
+from app.models.auth_session import AuthSession
 from app.models.base import Base
 from app.models.chat_message import ChatMessage
 from app.models.meeting import Meeting
@@ -15,6 +16,7 @@ from app.models.participant import Participant
 from app.models.user import User
 
 __all__ = [
+    "AuthSession",
     "Base",
     "ChatMessage",
     "Meeting",

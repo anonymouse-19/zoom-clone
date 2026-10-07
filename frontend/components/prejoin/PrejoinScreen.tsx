@@ -14,6 +14,7 @@
 "use client";
 
 import { Mic, Speaker, Video } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 
@@ -26,6 +27,7 @@ import { useMeetingActions } from "@/hooks/useMeetingActions";
 import { usePreferences } from "@/hooks/usePreferences";
 import type { JoinMeetingResult, ResolveResult } from "@/lib/api";
 import { playTestSound } from "@/lib/audio";
+import { loginPath } from "@/lib/authRedirect";
 import { saveMeetingSession } from "@/lib/meetingSession";
 
 import { DevicePreview } from "./DevicePreview";
@@ -212,6 +214,8 @@ function PrejoinForm({ options, resolved }: { options: PrejoinOptions; resolved:
         {isWaitingToJoin && isWaitingForHost ? (
           <WaitingForHost
             meetingTitle={resolved.title ?? ""}
+            startTime={resolved.start_time}
+            timeZone={user?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
             onCancel={() => setIsWaitingToJoin(false)}
           />
         ) : (
@@ -222,6 +226,19 @@ function PrejoinForm({ options, resolved }: { options: PrejoinOptions; resolved:
                 Hosted by {resolved.host_name} · ID {resolved.formatted_code}
               </p>
             </div>
+
+            {isWaitingForHost && user === null && (
+              <p className="text-sm text-ink-muted">
+                Are you the host?{" "}
+                <Link
+                  href={loginPath(`/j/${options.meetingCode}`)}
+                  className="font-semibold text-zoom-blue hover:underline"
+                >
+                  Log in
+                </Link>{" "}
+                to start this meeting.
+              </p>
+            )}
 
             {resolved.you_are_host && (
               <div className="rounded-lg bg-zoom-blue-soft p-3 text-sm">

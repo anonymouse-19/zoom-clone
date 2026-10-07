@@ -1,7 +1,7 @@
 """
-Inserts the demo data described in seed_data.py: the default user (Alex Morgan, id=1),
-three colleagues, upcoming meetings for the next week, and past meetings with
-attendance, chat and events.
+Inserts the demo data described in seed_data.py: the demo account (Alex Morgan, id=1)
+and three colleagues (all with the password DEMO_PASSWORD), upcoming meetings for the
+next week, and past meetings with attendance, chat and events.
 
 Called by: main.py on startup, and by hand with `python -m app.seed`.
 Idempotent: if any user already exists it does nothing, so restarting the server never
@@ -35,6 +35,7 @@ from app.models.enums import (
 from app.models.types import utc_now
 from app.seed_data import (
     ALEX,
+    DEMO_PASSWORD,
     PAST_MEETINGS,
     PRIYA,
     SEED_USERS,
@@ -48,8 +49,9 @@ from app.services.codes import (
     generate_passcode,
     generate_personal_meeting_id,
 )
+from app.services.passwords import hash_password
 
-# Wall-clock times in seed_data.py ("9:30 standup") are in the default user's timezone.
+# Wall-clock times in seed_data.py ("9:30 standup") are in the demo account's (Alex's) timezone.
 SEED_TIMEZONE_NAME = "Asia/Kolkata"
 SEED_TIMEZONE = ZoneInfo(SEED_TIMEZONE_NAME)
 # "Later today" meeting: at least this far ahead, so it's still upcoming during a demo.
@@ -164,14 +166,18 @@ def _session_at(participants: list[Participant], person: str, moment: datetime) 
 def _create_users(session: Session, issued_codes: set[str]) -> dict[str, User]:
     """Create SEED_USERS and return them keyed by name.
 
-    Ids are set explicitly so the default user is guaranteed to be id=1.
+    Ids are set explicitly so the demo account is guaranteed to be id=1.
     """
+    # Hashed once and shared: scrypt is deliberately slow, and it's the same password.
+    demo_password_hash = hash_password(DEMO_PASSWORD)
     users_by_name = {}
     for position, spec in enumerate(SEED_USERS):
         user = User(
             id=position + 1,
             name=spec.name,
             email=spec.email,
+            password_hash=demo_password_hash,
+            email_verified=True,
             avatar_color=spec.avatar_color,
             timezone=spec.timezone,
             personal_meeting_id=_new_personal_meeting_id(issued_codes),

@@ -1,20 +1,21 @@
 /**
  * The avatar at the top-right and its dropdown: who's signed in, their status, Settings,
- * and a Sign out placeholder (the app has no real login).
+ * and Sign out.
  */
 
 "use client";
 
 import { LogOut, Settings } from "lucide-react";
-import { toast } from "sonner";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Dropdown, DropdownDivider, DropdownItem } from "@/components/ui/Dropdown";
 import { Skeleton } from "@/components/ui/Feedback";
 import { useCurrentUser } from "@/hooks/queries";
+import { useLogOut } from "@/hooks/useAuth";
 
 export function ProfileMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { data: user } = useCurrentUser();
+  const logOut = useLogOut();
 
   if (!user) {
     return <Skeleton className="h-8 w-8 rounded-full" />;
@@ -41,7 +42,7 @@ export function ProfileMenu({ onOpenSettings }: { onOpenSettings: () => void }) 
       <DropdownItem onSelect={onOpenSettings}>
         <Settings size={16} aria-hidden /> Settings
       </DropdownItem>
-      <DropdownItem onSelect={() => toast.info("Sign out isn't available in this demo.")}>
+      <DropdownItem onSelect={() => void logOut()}>
         <LogOut size={16} aria-hidden /> Sign out
       </DropdownItem>
     </Dropdown>

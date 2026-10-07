@@ -75,7 +75,7 @@ function LiveRoom({ session }: { session: MeetingSession }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { preferences } = usePreferences();
-  const { data: meeting } = useMeeting(session.meetingCode);
+  const { data: meeting } = useMeeting(session.meetingCode, true, session.sessionToken);
   const status = useRoomStore((state) => state.status);
   const statusMessage = useRoomStore((state) => state.statusMessage);
   const participants = useRoomStore((state) => state.participants);

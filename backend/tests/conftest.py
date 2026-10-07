@@ -22,9 +22,10 @@ from sqlalchemy import Engine  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
 from app.db import build_engine, build_session_factory  # noqa: E402
-from app.deps import DEFAULT_USER_ID, get_db, get_session_factory  # noqa: E402
+from app.deps import get_db, get_session_factory  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import Base, User  # noqa: E402
+from app.services import auth_service  # noqa: E402
 from tests.factories import make_user  # noqa: E402
 
 
@@ -78,15 +79,18 @@ def client(db_engine: Engine) -> TestClient:
 
 
 @pytest.fixture
-def me(db_session: Session) -> User:
-    """The "logged-in" user: id=1, which is who get_current_user returns."""
-    return make_user(
+def me(db_session: Session, client: TestClient) -> User:
+    """The signed-in user. Every request `client` sends carries their session token,
+    as a browser does after logging in. (Tests about signing in use a fresh client.)"""
+    user = make_user(
         db_session,
-        id=DEFAULT_USER_ID,
         name="Alex Morgan",
         email="alex@example.com",
         personal_meeting_id="1234567890",
     )
+    token = auth_service.start_session(db_session, user)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return user
 
 
 @pytest.fixture

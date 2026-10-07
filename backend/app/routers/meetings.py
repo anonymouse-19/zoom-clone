@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Response, status
 from starlette.concurrency import run_in_threadpool
 
-from app.deps import CurrentUser, DbSession, LiveRooms
+from app.deps import CurrentUser, DbSession, JoinTicket, LiveRooms, OptionalUser
 from app.models.types import utc_now
 from app.routers.params import MeetingCode
 from app.schemas.chat import ChatMessageOut
@@ -75,7 +75,7 @@ def schedule_meeting(
 @router.get("/resolve", response_model=ResolveResponse)
 def resolve_join_input(
     db: DbSession,
-    user: CurrentUser,
+    user: OptionalUser,
     q: Annotated[str, Query(min_length=1, max_length=MAX_RESOLVE_INPUT_LENGTH)],
 ) -> ResolveResponse:
     """Accepts an ID ("123 4567 8901") or any invite link, and says whether it's joinable.
@@ -86,9 +86,15 @@ def resolve_join_input(
     return ResolveResponse.from_check(check)
 
 
-@router.get("/{meeting_code}", response_model=MeetingDetail, responses={**NOT_FOUND})
-def get_meeting(db: DbSession, meeting_code: MeetingCode) -> MeetingDetail:
-    meeting = meeting_service.get_meeting_by_code(db, meeting_code)
+@router.get("/{meeting_code}", response_model=MeetingDetail, responses={**NOT_FOUND, **FORBIDDEN})
+def get_meeting(
+    db: DbSession, user: OptionalUser, join_ticket: JoinTicket, meeting_code: MeetingCode
+) -> MeetingDetail:
+    """Full details, including the passcode and invite link. Only for the host, signed-in
+    users the meeting involves, and guests in it (X-Session-Token). 403 otherwise."""
+    meeting = meeting_service.get_meeting_for_viewer(
+        db, meeting_code, user=user, join_ticket=join_ticket
+    )
     return MeetingDetail.from_meeting(meeting)
 
 
@@ -146,11 +152,16 @@ async def end_meeting(
 @router.get(
     "/{meeting_code}/ics",
     response_class=Response,
-    responses={**NOT_FOUND, **CONFLICT},
+    responses={**NOT_FOUND, **FORBIDDEN, **CONFLICT},
 )
-def download_calendar_file(db: DbSession, meeting_code: MeetingCode) -> Response:
-    """The meeting as an .ics file. Content-Disposition makes the browser download it."""
-    meeting = meeting_service.get_meeting_by_code(db, meeting_code)
+def download_calendar_file(
+    db: DbSession, user: OptionalUser, join_ticket: JoinTicket, meeting_code: MeetingCode
+) -> Response:
+    """The meeting as an .ics file (it contains the invite link and passcode, so the same
+    people as the details may download it)."""
+    meeting = meeting_service.get_meeting_for_viewer(
+        db, meeting_code, user=user, join_ticket=join_ticket
+    )
     return Response(
         content=build_ics(meeting, now=utc_now()),
         media_type="text/calendar; charset=utf-8",
@@ -161,19 +172,27 @@ def download_calendar_file(db: DbSession, meeting_code: MeetingCode) -> Response
 @router.get(
     "/{meeting_code}/summary",
     response_model=MeetingSummaryOut,
-    responses={**NOT_FOUND, **CONFLICT},
+    responses={**NOT_FOUND, **FORBIDDEN, **CONFLICT},
 )
 def get_meeting_summary(
-    db: DbSession, user: CurrentUser, meeting_code: MeetingCode
+    db: DbSession, user: OptionalUser, join_ticket: JoinTicket, meeting_code: MeetingCode
 ) -> MeetingSummaryOut:
-    return summary_service.build_meeting_summary(db, meeting_code, user)
+    """The post-meeting recap, for the host and people who were in it (guests send their
+    join ticket). Nobody else's private chat is included."""
+    return summary_service.build_meeting_summary(
+        db, meeting_code, user=user, join_ticket=join_ticket
+    )
 
 
 @router.get(
     "/{meeting_code}/messages",
     response_model=list[ChatMessageOut],
-    responses={**NOT_FOUND},
+    responses={**NOT_FOUND, **FORBIDDEN},
 )
-def get_chat_history(db: DbSession, meeting_code: MeetingCode) -> list[ChatMessageOut]:
+def get_chat_history(
+    db: DbSession, user: OptionalUser, join_ticket: JoinTicket, meeting_code: MeetingCode
+) -> list[ChatMessageOut]:
     """Messages sent to everyone in the current/latest run of the meeting."""
-    return summary_service.list_public_messages(db, meeting_code)
+    return summary_service.list_public_messages(
+        db, meeting_code, user=user, join_ticket=join_ticket
+    )

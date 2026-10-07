@@ -10,8 +10,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { calendarFileUrl, type MeetingDetail } from "@/lib/api";
-import { googleCalendarUrl } from "@/lib/ics";
+import type { MeetingDetail } from "@/lib/api";
+import { downloadCalendarFile, googleCalendarUrl } from "@/lib/ics";
 
 type MeetingScheduledDialogProps = {
   meeting: MeetingDetail | null;
@@ -56,13 +56,13 @@ export function MeetingScheduledDialog({ meeting, onDone }: MeetingScheduledDial
             <Button onClick={copyInvitation}>
               <Copy size={16} aria-hidden /> Copy invitation
             </Button>
-            <a
-              href={calendarFileUrl(meeting.meeting_code)}
-              download
+            <button
+              type="button"
+              onClick={() => void downloadCalendarFile(meeting.meeting_code)}
               className={LINK_BUTTON_CLASSES}
             >
               <CalendarPlus size={16} aria-hidden /> Add to calendar (.ics)
-            </a>
+            </button>
             {googleUrl && (
               <a
                 href={googleUrl}

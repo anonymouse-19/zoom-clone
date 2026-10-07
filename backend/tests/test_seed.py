@@ -7,6 +7,7 @@ Behaviors proven in this file:
 5. A dropped-and-rejoined attendee has two participant rows (one per session).
 6. Every meeting has exactly one settings row.
 7. A personal room's meeting code is its host's Personal Meeting ID.
+8. Every demo account can log in with the demo password.
 """
 
 from collections import Counter
@@ -20,6 +21,8 @@ from sqlalchemy.orm import Session
 from app.models import Meeting, MeetingSettings, Participant, User
 from app.models.enums import MeetingStatus, MeetingType
 from app.seed import seed_if_empty
+from app.seed_data import DEMO_PASSWORD
+from app.services.passwords import verify_password
 
 # Pin the clock so results don't depend on when the tests run: 12:00 noon in India.
 FIXED_NOW = datetime(2026, 10, 6, 6, 30, tzinfo=UTC)
@@ -93,3 +96,9 @@ def test_personal_room_code_is_the_hosts_pmi(seeded: Session) -> None:
     assert len(rooms) == 4
     for room in rooms:
         assert room.meeting_code == room.host.personal_meeting_id
+
+
+def test_every_demo_account_has_the_demo_password(seeded: Session) -> None:
+    for user in seeded.scalars(select(User)):
+        assert user.password_hash is not None
+        assert verify_password(DEMO_PASSWORD, user.password_hash)

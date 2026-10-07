@@ -21,4 +21,6 @@ def _error(description: str) -> dict[str, Any]:
 NOT_FOUND = {404: _error("No meeting has this code")}
 FORBIDDEN = {403: _error("Only the host can do this")}
 CONFLICT = {409: _error("Not allowed in the meeting's current state (e.g. it already ended)")}
+UNAUTHORIZED = {401: _error("Not signed in, or the email or password is wrong")}
+TOO_MANY_REQUESTS = {429: _error("Too many failed attempts; try again in a few minutes")}
 UNAVAILABLE = {503: _error("Temporary problem; try again")}

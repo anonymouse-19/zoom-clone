@@ -83,7 +83,7 @@ TimezoneName = Annotated[str, AfterValidator(_check_timezone)]
 # never has to guess which zone the client meant.
 FutureStartTime = Annotated[AwareDatetime, AfterValidator(_check_not_in_past)]
 Passcode = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9]{1,10}$")]
-InviteeEmail = Annotated[str, AfterValidator(_normalize_email)]
+EmailAddress = Annotated[str, AfterValidator(_normalize_email)]
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ class ScheduleMeetingRequest(BaseModel):
     # None → the server generates one.
     passcode: Passcode | None = None
     settings: MeetingSettingsData = Field(default_factory=MeetingSettingsData)
-    invitees: list[InviteeEmail] = Field(default_factory=list, max_length=MAX_INVITEES)
+    invitees: list[EmailAddress] = Field(default_factory=list, max_length=MAX_INVITEES)
 
 
 class UpdateMeetingRequest(BaseModel):
@@ -146,7 +146,7 @@ class UpdateMeetingRequest(BaseModel):
     passcode: Passcode | None = None
     settings: MeetingSettingsData | None = None
     # When sent, this list *replaces* the invitee list.
-    invitees: list[InviteeEmail] | None = Field(default=None, max_length=MAX_INVITEES)
+    invitees: list[EmailAddress] | None = Field(default=None, max_length=MAX_INVITEES)
 
 
 # ---------------------------------------------------------------------------

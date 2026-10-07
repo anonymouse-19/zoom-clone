@@ -1,13 +1,15 @@
 /**
  * "Add to calendar" links, with no OAuth or calendar API:
- * - the .ics file comes from the backend (see api.calendarFileUrl), and works with
+ * - the .ics file comes from the backend (downloadCalendarFile), and works with
  *   Outlook, Apple Calendar and others;
  * - Google Calendar gets a pre-filled "new event" URL, built here.
  */
 
 import { formatInTimeZone } from "date-fns-tz";
+import { toast } from "sonner";
 
-import type { MeetingDetail } from "@/lib/api";
+import { getCalendarFile, type MeetingDetail } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
 
 const MS_PER_MINUTE = 60_000;
 // Google wants compact UTC times: 20261008T040000Z.
@@ -29,4 +31,17 @@ export function googleCalendarUrl(meeting: MeetingDetail): string | null {
     location: meeting.invite_link,
   });
   return `${GOOGLE_CALENDAR_NEW_EVENT_URL}?${params.toString()}`;
+}
+
+/**
+ * Download the meeting's .ics file. It's fetched with the sign-in token (see
+ * api.getCalendarFile); if the server refuses, a message pops up instead.
+ */
+export async function downloadCalendarFile(meetingCode: string): Promise<void> {
+  try {
+    const file = await getCalendarFile(meetingCode);
+    downloadBlob(`meeting-${meetingCode}.ics`, file);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Couldn't download the calendar file");
+  }
 }

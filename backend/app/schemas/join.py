@@ -5,6 +5,7 @@ Deliberately minimal: it's safe to show anyone who has the ID, so it carries no
 passcode, invite token or invitee list.
 """
 
+from datetime import datetime
 from typing import Self
 
 from pydantic import BaseModel
@@ -20,6 +21,8 @@ class ResolveResponse(BaseModel):
     formatted_code: str | None
     title: str | None
     host_name: str | None
+    # When it's scheduled to start (None for instant meetings and personal rooms).
+    start_time: datetime | None
     # False when the link carried a valid invite token or passcode.
     passcode_required: bool
     # True if the current user hosts it: the join page then offers "Start meeting".
@@ -35,6 +38,7 @@ class ResolveResponse(BaseModel):
             formatted_code=format_meeting_code(meeting.meeting_code) if meeting else None,
             title=meeting.title if meeting else None,
             host_name=meeting.host.name if meeting else None,
+            start_time=meeting.start_time if meeting else None,
             passcode_required=check.passcode_required,
             you_are_host=check.you_are_host,
         )

@@ -15,13 +15,16 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.realtime.room_manager import RoomManager
-from app.routers import health, meetings, participants, room, users
+from app.routers import auth, health, meetings, participants, room, users
 from app.seed import run_startup_seed
+from app.services.attempt_limiter import AttemptLimiter
 from app.services.errors import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
     ServiceError,
+    TooManyRequestsError,
+    UnauthorizedError,
     UnavailableError,
 )
 
@@ -37,12 +40,20 @@ ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"]
 # Which HTTP status each kind of service error becomes. Services raise plain Python
 # exceptions and never mention HTTP; this table is the only place the two meet.
 STATUS_CODE_FOR_ERROR: dict[type[ServiceError], int] = {
+    UnauthorizedError: 401,
     NotFoundError: 404,
     ForbiddenError: 403,
     ConflictError: 409,
+    TooManyRequestsError: 429,
     UnavailableError: 503,
 }
 BAD_REQUEST = 400
+
+# Guessing limits (see services/attempt_limiter.py). A person who mistypes a few times is
+# never blocked; a program trying thousands of passwords or passcodes is.
+LOGIN_FAILURES_ALLOWED = 5  # per account
+PASSCODE_FAILURES_ALLOWED = 10  # per meeting
+GUESSING_WINDOW_SECONDS = 15 * 60
 
 
 @asynccontextmanager
@@ -88,10 +99,12 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        # No cookies or auth headers exist yet (no login), so we don't allow credentials.
+        # The sign-in token travels in the Authorization header, not in a cookie, so
+        # the browser never sends credentials on its own and none need allowing.
         allow_credentials=False,
         allow_methods=ALLOWED_METHODS,
-        allow_headers=["Content-Type"],
+        # X-Session-Token: a guest's join ticket, which proves they're in a meeting.
+        allow_headers=["Content-Type", "Authorization", "X-Session-Token"],
     )
 
     app.add_exception_handler(ServiceError, handle_service_error)
@@ -100,8 +113,15 @@ def create_app() -> FastAPI:
     # app.state so routes reach it through deps.get_room_manager, and each test app
     # gets its own empty one.
     app.state.room_manager = RoomManager(reconnect_grace_seconds=settings.reconnect_grace_seconds)
+    app.state.login_attempts = AttemptLimiter(
+        max_failures=LOGIN_FAILURES_ALLOWED, window_seconds=GUESSING_WINDOW_SECONDS
+    )
+    app.state.passcode_attempts = AttemptLimiter(
+        max_failures=PASSCODE_FAILURES_ALLOWED, window_seconds=GUESSING_WINDOW_SECONDS
+    )
 
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(users.router, prefix=API_PREFIX)
     app.include_router(meetings.router, prefix=API_PREFIX)
     app.include_router(participants.router, prefix=API_PREFIX)

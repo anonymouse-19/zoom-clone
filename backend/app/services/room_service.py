@@ -56,6 +56,10 @@ def authenticate_participant(
         raise ForbiddenError("This meeting link has expired. Join the meeting again.")
 
     # Step 2: the meeting must be running.
+    if meeting.status == MeetingStatus.SCHEDULED:
+        raise ConflictError("The host hasn't started this meeting yet")
+    if meeting.status == MeetingStatus.CANCELLED:
+        raise ConflictError("This meeting has been cancelled")
     if meeting.status != MeetingStatus.LIVE:
         raise ConflictError("This meeting has ended")
 
@@ -230,8 +234,21 @@ def _end_if_everyone_left(db: Session, meeting: Meeting) -> bool:
     )
     if someone_is_in:
         return False
-    finish_meeting(db, meeting)
+    # Guests who joined before the host all left before the host came: the meeting goes
+    # back to "waiting for the host", so the host can still start it later.
+    finish_meeting(db, meeting, can_start_again=not _host_came(meeting))
     return True
+
+
+def _host_came(meeting: Meeting) -> bool:
+    """True if someone held the host role in this run of the meeting (since it started)."""
+    started_at = meeting.started_at
+    return any(
+        participant.role == ParticipantRole.HOST
+        and started_at is not None
+        and participant.joined_at >= started_at
+        for participant in meeting.participants
+    )
 
 
 def end_meeting_as_host(db: Session, *, meeting_code: str, participant_id: int) -> None:

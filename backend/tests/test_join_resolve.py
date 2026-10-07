@@ -5,7 +5,8 @@ Behaviors proven in this file (the smart join input, GET /api/meetings/resolve):
 2. Garbage input is reported as invalid, not as an error.
 3. The join state is right for each situation: live → ready; not started → waiting for
    host unless "join before host" is on; ended; cancelled; not found.
-4. A passcode is required unless the link carried a valid token or passcode.
+4. A passcode is required unless the link carried a valid invite token. A passcode in
+   the link is never checked here (that would allow unlimited guessing; joining checks it).
 5. /resolve answers as a guest (it serves the guest door), but tells the host they're the
    host so the page can offer "Start meeting" instead.
 """
@@ -128,7 +129,7 @@ def test_unknown_and_invalid_inputs_get_clear_states(client: TestClient, me: Use
     assert _resolve(client, "hello")["state"] == "invalid_input"
 
 
-def test_a_valid_invite_token_or_passcode_skips_the_passcode_prompt(
+def test_only_a_valid_invite_token_skips_the_passcode_prompt(
     client: TestClient, db_session: Session, me: User
 ) -> None:
     meeting = make_meeting(
@@ -143,7 +144,10 @@ def test_a_valid_invite_token_or_passcode_skips_the_passcode_prompt(
     assert _resolve(client, code)["passcode_required"] is True
     assert _resolve(client, f"/j/{code}?tk=wrong")["passcode_required"] is True
     assert _resolve(client, f"/j/{code}?tk=secret-token")["passcode_required"] is False
-    assert _resolve(client, f"/j/{code}?pwd=Pa55")["passcode_required"] is False
+    # Right or wrong, a passcode gets the same answer: no guessing oracle.
+    right = _resolve(client, f"/j/{code}?pwd=Pa55")
+    wrong = _resolve(client, f"/j/{code}?pwd=nope")
+    assert right["passcode_required"] is wrong["passcode_required"] is True
 
 
 def test_resolve_never_reveals_the_passcode_or_token(

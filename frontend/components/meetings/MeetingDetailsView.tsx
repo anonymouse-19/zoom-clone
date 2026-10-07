@@ -19,9 +19,9 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
 import { useCancelMeeting } from "@/hooks/queries";
 import { useMeetingActions } from "@/hooks/useMeetingActions";
-import { calendarFileUrl, type MeetingDetail, type MeetingStatus, type User } from "@/lib/api";
+import type { MeetingDetail, MeetingStatus, User } from "@/lib/api";
 import { formatDuration, formatFullDate, formatTimeRange } from "@/lib/format";
-import { googleCalendarUrl } from "@/lib/ics";
+import { downloadCalendarFile, googleCalendarUrl } from "@/lib/ics";
 
 const STATUS_BADGES: Record<MeetingStatus, { label: string; className: string }> = {
   scheduled: { label: "Upcoming", className: "bg-zoom-blue-soft text-zoom-blue" },
@@ -141,7 +141,7 @@ function AddToCalendarMenu({ meeting }: { meeting: MeetingDetail }) {
         </>
       }
     >
-      <DropdownItem onSelect={() => window.open(calendarFileUrl(meeting.meeting_code), "_self")}>
+      <DropdownItem onSelect={() => void downloadCalendarFile(meeting.meeting_code)}>
         Outlook / Apple Calendar (.ics)
       </DropdownItem>
       {googleUrl && (

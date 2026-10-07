@@ -14,6 +14,11 @@ class NotFoundError(ServiceError):
     """The thing asked for doesn't exist. → HTTP 404"""
 
 
+class UnauthorizedError(ServiceError):
+    """Not signed in, or the sign-in is no longer valid (e.g. a wrong password or an
+    expired session). → HTTP 401"""
+
+
 class ForbiddenError(ServiceError):
     """The current user isn't allowed to do this (e.g. not the host). → HTTP 403"""
 
@@ -21,6 +26,10 @@ class ForbiddenError(ServiceError):
 class ConflictError(ServiceError):
     """The request is valid, but not in the resource's current state
     (e.g. editing a meeting that already ended). → HTTP 409"""
+
+
+class TooManyRequestsError(ServiceError):
+    """Too many failed attempts in a short time (password or passcode guessing). → HTTP 429"""
 
 
 class UnavailableError(ServiceError):

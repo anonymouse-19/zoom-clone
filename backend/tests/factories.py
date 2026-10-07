@@ -25,6 +25,8 @@ def make_user(session: Session, **overrides: object) -> User:
         "email": f"user{number}@example.com",
         "avatar_color": "#0B5CFF",
         "personal_meeting_id": f"{9000000000 + number}",
+        # Like the demo accounts. Tests about unverified sign-ups pass False.
+        "email_verified": True,
     }
     fields.update(overrides)
     user = User(**fields)

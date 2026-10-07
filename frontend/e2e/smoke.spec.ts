@@ -1,8 +1,10 @@
 /**
  * Behaviors proven in this file (end to end, in real browsers, against running servers):
- * 1. The dashboard shows the seeded user's meetings.
- * 2. Two people in one meeting see each other's video: the host starts a meeting, a guest
- *    joins with the invite link, and video frames flow both ways (WebRTC).
+ * 1. Signed out, the dashboard sends you to the login page; logging in with the demo
+ *    account shows its seeded meetings.
+ * 2. Two people in one meeting see each other's video: the signed-in host starts a
+ *    meeting, a guest (no account) joins with the invite link, and video frames flow
+ *    both ways (WebRTC).
  * 3. When the host ends the meeting, the guest lands on the summary page.
  */
 
@@ -17,9 +19,18 @@ async function playingVideoCount(page: Page): Promise<number> {
   );
 }
 
-test("the dashboard shows the seeded meetings", async ({ page }) => {
-  await page.goto("/");
+/** Log in with the seeded demo account, from the login page's demo button. */
+async function logInAsDemoUser(page: Page) {
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Log in as the demo user" }).click();
   await expect(page.getByRole("button", { name: "New meeting", exact: true })).toBeVisible();
+}
+
+test("signed out you get the login page; the demo account sees its meetings", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login/);
+
+  await logInAsDemoUser(page);
   await expect(page.getByText("Daily Standup").first()).toBeVisible();
 });
 
@@ -28,12 +39,18 @@ test("two people in a meeting see each other, and ending it shows the summary", 
   page: host,
   request,
 }) => {
-  // The host starts a new meeting from the dashboard.
-  await host.goto("/");
+  // The host logs in and starts a new meeting from the dashboard.
+  await logInAsDemoUser(host);
   await host.getByRole("button", { name: "New meeting", exact: true }).click();
   await expect(host.getByRole("button", { name: "Change view" })).toBeVisible();
   const meetingCode = host.url().match(/room\/(\d+)/)?.[1] ?? "";
-  const meeting = await (await request.get(`${API_URL}/api/meetings/${meetingCode}`)).json();
+  // Meeting details (with the invite link) are private to the host, so ask as the host.
+  const hostToken = await host.evaluate(() => window.localStorage.getItem("zoom-clone.auth-token"));
+  const meeting = await (
+    await request.get(`${API_URL}/api/meetings/${meetingCode}`, {
+      headers: { Authorization: `Bearer ${hostToken}` },
+    })
+  ).json();
 
   // A guest, in a separate browser context (like another computer), joins by invite link.
   const guestContext = await browser.newContext();

@@ -20,13 +20,17 @@ from app.schemas.summary import AttendanceSessionOut, AttendeeOut, MeetingSummar
 from app.services.attendance import attended, person_key
 from app.services.codes import format_meeting_code
 from app.services.errors import ConflictError
-from app.services.meeting_service import get_meeting_by_code
+from app.services.meeting_service import get_meeting_for_viewer
 
 SECONDS_PER_MINUTE = 60
 
 
-def build_meeting_summary(db: Session, meeting_code: str, user: User) -> MeetingSummaryOut:
-    meeting = get_meeting_by_code(db, meeting_code)
+def build_meeting_summary(
+    db: Session, meeting_code: str, *, user: User | None, join_ticket: str | None
+) -> MeetingSummaryOut:
+    """The recap, for the host and people who were in the meeting (attendance and chat
+    are private to them)."""
+    meeting = get_meeting_for_viewer(db, meeting_code, user=user, join_ticket=join_ticket)
     if meeting.started_at is None:
         raise ConflictError("This meeting hasn't taken place yet")
 
@@ -47,14 +51,15 @@ def build_meeting_summary(db: Session, meeting_code: str, user: User) -> Meeting
     )
 
 
-def list_public_messages(db: Session, meeting_code: str) -> list[ChatMessageOut]:
-    """Chat history sent "to everyone" in the current/latest run of the meeting.
+def list_public_messages(
+    db: Session, meeting_code: str, *, user: User | None, join_ticket: str | None
+) -> list[ChatMessageOut]:
+    """Chat history sent "to everyone" in the current/latest run of the meeting, for the
+    host and people in the meeting (get_meeting_for_viewer).
 
-    Private messages are never returned here: this endpoint has no way to prove which
-    participant is asking, so it can't know who may read them. They're delivered live
-    over the WebSocket instead (Phase 6).
+    Private messages are never returned here; they're delivered live over the WebSocket.
     """
-    meeting = get_meeting_by_code(db, meeting_code)
+    meeting = get_meeting_for_viewer(db, meeting_code, user=user, join_ticket=join_ticket)
     public_messages = [
         message
         for message in _messages_in_latest_run(meeting)
@@ -82,10 +87,13 @@ def _messages_in_latest_run(meeting: Meeting) -> list[ChatMessage]:
     return [m for m in meeting.messages if m.sent_at >= started_at]
 
 
-def _is_visible_to(message: ChatMessage, user: User) -> bool:
-    """Public messages are visible to everyone; private ones only to sender and recipient."""
+def _is_visible_to(message: ChatMessage, user: User | None) -> bool:
+    """Public messages are visible to everyone; private ones only to the sender and
+    recipient (if they had accounts). A guest who isn't signed in sees public ones only."""
     if message.recipient is None:
         return True
+    if user is None:
+        return False
     return user.id in (message.sender.user_id, message.recipient.user_id)
 
 

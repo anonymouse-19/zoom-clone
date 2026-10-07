@@ -55,10 +55,36 @@ export function loadMeetingSession(meetingCode: string): MeetingSession | null {
   }
 }
 
+/**
+ * Forget the ticket when leaving (so the room can't reconnect with it), but keep its
+ * token as a "summary pass": the proof that lets this tab see the meeting's summary.
+ */
 export function clearMeetingSession(meetingCode: string): void {
   try {
+    const session = loadMeetingSession(meetingCode);
+    if (session !== null) {
+      window.sessionStorage.setItem(summaryPassKey(meetingCode), session.sessionToken);
+    }
     window.sessionStorage.removeItem(storageKey(meetingCode));
   } catch {
     // Nothing to clear.
   }
+}
+
+/** The token that proves this tab was in the meeting (for the summary), if any. */
+export function loadSummaryPass(meetingCode: string): string | undefined {
+  try {
+    const session = loadMeetingSession(meetingCode);
+    return (
+      session?.sessionToken ??
+      window.sessionStorage.getItem(summaryPassKey(meetingCode)) ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function summaryPassKey(meetingCode: string): string {
+  return `zoom-clone:summary-pass:${meetingCode}`;
 }

@@ -16,10 +16,15 @@ from datetime import time
 # People
 # ---------------------------------------------------------------------------
 
-ALEX = "Alex Morgan"  # the default, "logged in" user (id=1)
+ALEX = "Alex Morgan"  # the demo account shown on the login page (id=1)
 PRIYA = "Priya Sharma"
 DANIEL = "Daniel Kim"
 SOFIA = "Sofia Rossi"
+
+
+# Every demo account logs in with this password, e.g. alex.morgan@example.com / demo1234.
+# It's public on purpose (the login page shows it), so it protects nothing real.
+DEMO_PASSWORD = "demo1234"
 
 
 @dataclass(frozen=True)
@@ -59,7 +64,7 @@ SEED_USERS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Upcoming meetings (times are wall-clock times in the default user's timezone)
+# Upcoming meetings (times are wall-clock times in Alex's timezone)
 # ---------------------------------------------------------------------------
 
 STANDUP_DESCRIPTION = "Yesterday / today / blockers. Keep it under 15 minutes."

@@ -3,8 +3,9 @@ Behaviors proven in this file (who may do what):
 1. A non-host gets 403 for every host-only action (edit, cancel, start, end), and the
    meeting is left unchanged.
 2. "Who is the current user" comes from one dependency: swap it, and the same request
-   is allowed. That's the seam where real authentication would plug in.
-3. GET /api/me returns the default user; if that user is missing, the API says so (503).
+   is allowed. No route reads the sign-in token itself.
+3. GET /api/me returns the signed-in user; without a sign-in it's 401.
+(Signing up, logging in and out: test_auth.py.)
 """
 
 import pytest
@@ -63,15 +64,17 @@ def test_the_current_user_comes_from_a_single_dependency(
     assert client.post(path).status_code == 200
 
 
-def test_me_returns_the_default_user(client: TestClient, me: User) -> None:
+def test_me_returns_the_signed_in_user(client: TestClient, me: User) -> None:
     response = client.get("/api/me")
 
     assert response.status_code == 200
-    assert response.json()["id"] == 1
+    assert response.json()["id"] == me.id
     assert response.json()["name"] == "Alex Morgan"
+    assert "password_hash" not in response.json()
 
 
-def test_me_reports_a_missing_default_user_as_503(client: TestClient) -> None:
-    response = client.get("/api/me")  # no `me` fixture, so user 1 doesn't exist
+def test_me_without_signing_in_is_401(client: TestClient) -> None:
+    response = client.get("/api/me")  # no `me` fixture, so no token is sent
 
-    assert response.status_code == 503
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Please log in to continue"}

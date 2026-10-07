@@ -26,7 +26,7 @@ export function ClockCard() {
   const { data: user } = useCurrentUser();
   const upcoming = useMeetings("upcoming");
 
-  const isReady = now !== null && user !== undefined;
+  const isReady = now !== null && user !== undefined && user !== null;
   // Keep only meetings whose start falls on today's date in the user's timezone.
   const todaysMeetings =
     isReady && upcoming.data

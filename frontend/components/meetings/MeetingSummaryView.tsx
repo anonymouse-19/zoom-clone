@@ -10,6 +10,7 @@
 
 import { Download } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage, Skeleton } from "@/components/ui/Feedback";
@@ -17,6 +18,7 @@ import { useCurrentUser, useMeetingSummary } from "@/hooks/queries";
 import type { Attendee, MeetingSummary } from "@/lib/api";
 import { formatDuration, formatFullDate, formatTime } from "@/lib/format";
 import { downloadBlob } from "@/lib/download";
+import { loadSummaryPass } from "@/lib/meetingSession";
 import { buildTranscript } from "@/lib/transcript";
 
 const HEADINGS = {
@@ -33,7 +35,9 @@ type MeetingSummaryViewProps = {
 
 export function MeetingSummaryView({ meetingCode, reason }: MeetingSummaryViewProps) {
   const { data: user } = useCurrentUser();
-  const summaryQuery = useMeetingSummary(meetingCode);
+  // A guest proves they were in the meeting with the token kept from their join ticket.
+  const [summaryPass] = useState(() => loadSummaryPass(meetingCode));
+  const summaryQuery = useMeetingSummary(meetingCode, summaryPass);
 
   if (summaryQuery.isLoading || user === undefined) {
     return <Skeleton className="h-96" />;
@@ -47,7 +51,9 @@ export function MeetingSummaryView({ meetingCode, reason }: MeetingSummaryViewPr
       </div>
     );
   }
-  return <SummaryContent summary={summaryQuery.data} reason={reason} timeZone={user.timezone} />;
+  // A guest without an account sees times in their browser's timezone.
+  const timeZone = user?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return <SummaryContent summary={summaryQuery.data} reason={reason} timeZone={timeZone} />;
 }
 
 type SummaryContentProps = {
