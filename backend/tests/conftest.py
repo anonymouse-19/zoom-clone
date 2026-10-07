@@ -11,6 +11,7 @@ import os
 os.environ["DATABASE_URL"] = "sqlite://"  # in-memory; tests needing a DB use db_session
 os.environ["SEED_ON_STARTUP"] = "false"
 os.environ["FRONTEND_URL"] = "http://frontend.test"
+os.environ["RECONNECT_GRACE_SECONDS"] = "0"  # see live_client
 
 from collections.abc import Iterator  # noqa: E402  (must come after the env setup above)
 from pathlib import Path  # noqa: E402
@@ -18,10 +19,10 @@ from pathlib import Path  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import Engine  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
 from app.db import build_engine, build_session_factory  # noqa: E402
-from app.deps import DEFAULT_USER_ID, get_db  # noqa: E402
+from app.deps import DEFAULT_USER_ID, get_db, get_session_factory  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import Base, User  # noqa: E402
 from tests.factories import make_user  # noqa: E402
@@ -67,7 +68,12 @@ def client(db_engine: Engine) -> TestClient:
         finally:
             session.close()
 
+    # The meeting room's WebSocket opens its own short sessions from a factory.
+    def get_test_session_factory() -> sessionmaker[Session]:
+        return session_factory
+
     app.dependency_overrides[get_db] = get_test_db
+    app.dependency_overrides[get_session_factory] = get_test_session_factory
     return TestClient(app)
 
 
@@ -81,3 +87,15 @@ def me(db_session: Session) -> User:
         email="alex@example.com",
         personal_meeting_id="1234567890",
     )
+
+
+@pytest.fixture
+def live_client(client: TestClient) -> Iterator[TestClient]:
+    """The test client, entered with `with`, so every request and WebSocket in a test
+    runs on ONE shared event loop, like the real server. Without it, each connection
+    would get its own loop, and messages between two connections would cross loops.
+
+    (RECONNECT_GRACE_SECONDS=0 above: in tests a dropped connection has left at once.)
+    """
+    with client:
+        yield client

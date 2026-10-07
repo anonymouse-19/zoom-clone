@@ -58,6 +58,8 @@ export function useMeetingActions() {
         cameraId: "",
         microphoneId: "",
         speakerId: "",
+        // The pre-join page offers the host "Start as host" again.
+        rejoinPath: `/j/${meetingCode}`,
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.allMeetingLists });
       router.push(`/room/${meetingCode}`);

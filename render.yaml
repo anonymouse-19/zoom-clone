@@ -1,0 +1,28 @@
+# Render "Blueprint": how to run the backend on Render's free tier.
+# In the Render dashboard: New → Blueprint → pick this repository. Render reads this file,
+# creates the web service, and asks for the two values marked `sync: false`.
+#
+# Free-tier facts this setup accounts for (docs/DECISIONS.md D-081):
+# - The service sleeps after ~15 minutes without traffic; the next request wakes it
+#   (about a minute).
+# - The disk is wiped on every restart and deploy. The start command recreates the tables
+#   (alembic) and the app re-seeds the demo data when the database is empty.
+# - One instance only, which is exactly what the in-memory meeting rooms need.
+services:
+  - type: web
+    name: zoom-clone-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      # Your Vercel URL, e.g. https://zoom-clone.vercel.app (no trailing slash).
+      - key: CORS_ORIGINS
+        sync: false
+      # The same Vercel URL: invite links point there.
+      - key: FRONTEND_URL
+        sync: false

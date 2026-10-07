@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # Fill an empty database with demo data when the server starts. Tests turn it off.
     seed_on_startup: bool = True
 
+    # How long a dropped meeting connection keeps its seat before it counts as having
+    # left. The browser retries for less than this (see frontend roomConnection.ts).
+    reconnect_grace_seconds: float = 30
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Split CORS_ORIGINS into a clean list, dropping blanks and trailing slashes.

@@ -17,7 +17,7 @@ from app.models.enums import ParticipantRole
 from app.models.types import utc_now
 from app.schemas.chat import ChatMessageOut
 from app.schemas.summary import AttendanceSessionOut, AttendeeOut, MeetingSummaryOut
-from app.services.attendance import person_key
+from app.services.attendance import attended, person_key
 from app.services.codes import format_meeting_code
 from app.services.errors import ConflictError
 from app.services.meeting_service import get_meeting_by_code
@@ -42,7 +42,7 @@ def build_meeting_summary(db: Session, meeting_code: str, user: User) -> Meeting
         started_at=meeting.started_at,
         ended_at=meeting.ended_at,
         duration_minutes=_minutes_between(meeting.started_at, window_end),
-        attendees=_group_by_person(sessions, window_end),
+        attendees=_group_by_person(sessions, window_end, host_user_id=meeting.host_id),
         messages=[ChatMessageOut.from_message(message) for message in messages],
     )
 
@@ -72,7 +72,7 @@ def _sessions_in_latest_run(meeting: Meeting) -> list[Participant]:
     if meeting.started_at is None:
         return []
     started_at = meeting.started_at
-    return [p for p in meeting.participants if p.joined_at >= started_at]
+    return [p for p in attended(meeting.participants) if p.joined_at >= started_at]
 
 
 def _messages_in_latest_run(meeting: Meeting) -> list[ChatMessage]:
@@ -93,18 +93,28 @@ def _minutes_between(start: datetime, end: datetime) -> int:
     return round((end - start).total_seconds() / SECONDS_PER_MINUTE)
 
 
-def _group_by_person(sessions: list[Participant], window_end: datetime) -> list[AttendeeOut]:
+def _group_by_person(
+    sessions: list[Participant], window_end: datetime, *, host_user_id: int
+) -> list[AttendeeOut]:
     """Merge join sessions into one entry per person, in order of first arrival."""
     sessions_by_person: dict[str, list[Participant]] = {}
     for session in sorted(sessions, key=lambda participant: participant.joined_at):
         sessions_by_person.setdefault(person_key(session), []).append(session)
 
-    return [_attendee_from_sessions(group, window_end) for group in sessions_by_person.values()]
+    return [
+        _attendee_from_sessions(group, window_end, host_user_id=host_user_id)
+        for group in sessions_by_person.values()
+    ]
 
 
-def _attendee_from_sessions(sessions: list[Participant], window_end: datetime) -> AttendeeOut:
+def _attendee_from_sessions(
+    sessions: list[Participant], window_end: datetime, *, host_user_id: int
+) -> AttendeeOut:
     first_session = sessions[0]
-    was_ever_host = any(s.role == ParticipantRole.HOST for s in sessions)
+    # The meeting's own host is "Host" even after handing the role over mid-meeting;
+    # anyone who was handed the role counts as a host too.
+    is_meeting_owner = first_session.user_id == host_user_id
+    was_ever_host = is_meeting_owner or any(s.role == ParticipantRole.HOST for s in sessions)
     total_minutes = sum(_minutes_between(s.joined_at, s.left_at or window_end) for s in sessions)
     return AttendeeOut(
         display_name=first_session.display_name,

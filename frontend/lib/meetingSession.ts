@@ -3,11 +3,13 @@
  * meeting room: who we joined as, the secret session token, and the mic/camera choices.
  *
  * Stored in sessionStorage, which is per browser *tab*: two tabs on the same meeting are
- * two separate participants, each with its own ticket. A refresh keeps the ticket, so the
- * room can reconnect. Closing the tab forgets it.
+ * two separate participants, each with its own ticket. A refresh keeps the ticket, and
+ * the room reconnects with it: the server keeps the seat for 30 seconds after a
+ * connection drops (docs/DECISIONS.md D-066). If that's too late, the room offers
+ * "Rejoin" via `rejoinPath`. Closing the tab forgets the ticket.
  *
  * Called by: hooks/useMeetingActions.ts (host Start) and components/prejoin/PrejoinScreen.tsx
- * (write); the meeting room (read).
+ * (write); components/meeting/MeetingRoom.tsx (read).
  */
 
 import type { ParticipantRole, ParticipantStatus } from "@/lib/api";
@@ -25,6 +27,11 @@ export type MeetingSession = {
   cameraId: string;
   microphoneId: string;
   speakerId: string;
+  /**
+   * Where "Rejoin" goes if this join session ends (connection lost, page refreshed): the
+   * pre-join page, with the invite credentials, so a guest isn't asked for the passcode.
+   */
+  rejoinPath: string;
 };
 
 function storageKey(meetingCode: string): string {

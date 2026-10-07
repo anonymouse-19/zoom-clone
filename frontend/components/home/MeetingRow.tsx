@@ -1,7 +1,8 @@
 /**
  * One meeting in a list.
  * - UpcomingMeetingRow: time range, title, meeting ID, and Start (host) / Join, plus a
- *   "…" menu (Copy invitation, Details, and any extra items the page adds).
+ *   "…" menu (Copy invitation, Details, and any extra items the page adds). In the 10
+ *   minutes before it starts, a countdown appears and Start is highlighted.
  * - RecentMeetingRow: when it ran, how long, how many people, and Start again / Details.
  *
  * Used by: home/MeetingList.tsx, home/ClockCard.tsx, and the Meetings page.
@@ -18,10 +19,20 @@ import { Button } from "@/components/ui/Button";
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
 import { useCreateInstantMeeting } from "@/hooks/queries";
 import { useMeetingActions } from "@/hooks/useMeetingActions";
+import { useNow } from "@/hooks/useNow";
 import type { MeetingListItem } from "@/lib/api";
-import { formatDuration, formatFullDate, formatTime, formatTimeRange } from "@/lib/format";
+import {
+  formatDuration,
+  formatFullDate,
+  formatTime,
+  formatTimeRange,
+  minutesUntil,
+} from "@/lib/format";
 
 const MS_PER_MINUTE = 60_000;
+// "Starting soon" nudge: how early it appears, and how often the countdown updates.
+const STARTING_SOON_MINUTES = 10;
+const COUNTDOWN_REFRESH_MS = 30_000;
 
 /**
  * - "responsive": on wide screens the time gets its own column on the left; on phones it
@@ -53,6 +64,7 @@ export function UpcomingMeetingRow({
   const timeRange = meeting.start_time
     ? formatTimeRange(meeting.start_time, meeting.duration_minutes, timeZone)
     : "";
+  const countdown = useStartingSoonCountdown(meeting);
 
   return (
     <li className="flex items-center gap-4 px-4 py-3 hover:bg-canvas">
@@ -60,6 +72,9 @@ export function UpcomingMeetingRow({
         <div className="hidden w-36 shrink-0 text-sm sm:block">
           <p className="font-semibold">{timeRange}</p>
           {isLive && <p className="mt-0.5 text-xs font-semibold text-zoom-green">In progress</p>}
+          {countdown && (
+            <p className="mt-0.5 text-xs font-semibold text-zoom-orange">{countdown}</p>
+          )}
         </div>
       )}
 
@@ -69,6 +84,7 @@ export function UpcomingMeetingRow({
         >
           {timeRange}
           {isLive && <span className="text-zoom-green"> · In progress</span>}
+          {countdown && <span className="text-zoom-orange"> · {countdown}</span>}
         </p>
         <p className="truncate text-sm font-semibold">{meeting.title}</p>
         <p className="truncate text-xs text-ink-muted">
@@ -78,7 +94,12 @@ export function UpcomingMeetingRow({
       </div>
 
       {isHost ? (
-        <Button size="sm" onClick={() => startAndEnter(meeting.meeting_code)} disabled={isStarting}>
+        <Button
+          size="sm"
+          onClick={() => startAndEnter(meeting.meeting_code)}
+          disabled={isStarting}
+          className={countdown ? "ring-2 ring-zoom-orange ring-offset-2" : ""}
+        >
           Start
         </Button>
       ) : (
@@ -102,6 +123,25 @@ export function UpcomingMeetingRow({
       </Dropdown>
     </li>
   );
+}
+
+/**
+ * "Starts in 7 min" during the last 10 minutes before a scheduled start ("Starting now" at
+ * zero), so the host notices it's time. Null otherwise, and for meetings already live.
+ */
+function useStartingSoonCountdown(meeting: MeetingListItem): string | null {
+  const now = useNow(COUNTDOWN_REFRESH_MS);
+  if (now === null || meeting.start_time === null || meeting.status === "live") {
+    return null;
+  }
+  const minutesToStart = minutesUntil(meeting.start_time, now);
+  if (minutesToStart < 0 || minutesToStart > STARTING_SOON_MINUTES) {
+    return null;
+  }
+  if (minutesToStart === 0) {
+    return "Starting now";
+  }
+  return `Starts in ${minutesToStart} min`;
 }
 
 type RecentMeetingRowProps = {

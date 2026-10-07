@@ -11,6 +11,9 @@ import { formatInTimeZone } from "date-fns-tz";
 
 const MINUTES_PER_HOUR = 60;
 const MS_PER_MINUTE = 60_000;
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
 const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
 
 // date-fns format patterns, named so call sites read clearly.
@@ -109,4 +112,21 @@ export function formatDuration(totalMinutes: number): string {
 /** Whole minutes from `now` until `moment` (negative if it's in the past). */
 export function minutesUntil(moment: string, now: Date): number {
   return Math.round((new Date(moment).getTime() - now.getTime()) / MS_PER_MINUTE);
+}
+
+/** Two digits, for clock-style times: 4 → "04". */
+function twoDigits(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/** Time since the meeting started, like Zoom's in-meeting timer: "04:09", "1:02:03". */
+export function formatElapsed(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / MS_PER_SECOND));
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  if (hours > 0) {
+    return `${hours}:${twoDigits(minutes)}:${twoDigits(seconds)}`;
+  }
+  return `${twoDigits(minutes)}:${twoDigits(seconds)}`;
 }

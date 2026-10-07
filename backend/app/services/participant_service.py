@@ -35,7 +35,7 @@ from app.services.meeting_service import get_meeting_by_code, require_host, star
 
 
 def join_meeting(
-    db: Session, meeting_code: str, user: User, request: JoinMeetingRequest
+    db: Session, meeting_code: str, user: User, request: JoinMeetingRequest, *, is_locked: bool
 ) -> Participant:
     """Create a join session for `meeting_code`, or raise if the rules say no."""
     meeting = get_meeting_by_code(db, meeting_code)
@@ -49,6 +49,8 @@ def join_meeting(
 
     # Step 2: is the meeting joinable right now (not ended, cancelled, or waiting)?
     _require_joinable(meeting, as_host=is_host_door)
+    if is_locked and not is_host_door:
+        raise ConflictError("This meeting has been locked by the host")
 
     # Step 3: guests must prove they were invited.
     # INTERVIEW: checked on the server; the pre-join screen's passcode box is only UI.

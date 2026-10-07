@@ -56,6 +56,23 @@ function joinInputFor(options: PrejoinOptions): string {
   return `/j/${options.meetingCode}?${params.toString()}`;
 }
 
+/**
+ * Where "Rejoin" in the room leads if this join session ends: the same link, plus any
+ * passcode that was typed and the name used, so rejoining needs no retyping.
+ */
+function rejoinPathFor(
+  options: PrejoinOptions,
+  typedPasscode: string,
+  displayName: string,
+): string {
+  const params = new URLSearchParams();
+  if (options.inviteToken) params.set("tk", options.inviteToken);
+  const passcode = typedPasscode || options.linkPasscode;
+  if (passcode) params.set("pwd", passcode);
+  params.set("name", displayName);
+  return `/j/${options.meetingCode}?${params.toString()}`;
+}
+
 export function PrejoinScreen(options: PrejoinOptions) {
   const resolved = useResolvedJoinInput(joinInputFor(options));
 
@@ -120,6 +137,7 @@ function PrejoinForm({ options, resolved }: { options: PrejoinOptions; resolved:
       cameraId,
       microphoneId,
       speakerId,
+      rejoinPath: rejoinPathFor(options, passcode, joined.display_name),
     });
     router.push(`/room/${options.meetingCode}${options.shareAfterJoin ? "?share=1" : ""}`);
   }

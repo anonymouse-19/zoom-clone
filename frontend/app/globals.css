@@ -29,6 +29,25 @@
 
   /* Shapes: Zoom's big rounded-square action tiles. */
   --radius-tile: 20px;
+
+  /*
+   * A reaction floats up from its tile (the store removes it after 5 s). It ends fully
+   * visible, so with reduced motion (animation skipped to its end) it simply stays put.
+   */
+  --animate-float-up: float-up 5s ease-out forwards;
+  @keyframes float-up {
+    0% {
+      opacity: 0;
+      transform: translateY(40%);
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(-120%);
+    }
+  }
 }
 
 /*

@@ -4,19 +4,23 @@ FastAPI calls for them before the route runs ("dependency injection").
 
 - get_db: opens one database session per request and always closes it.
 - get_current_user: decides who is calling.
+- get_session_factory: for the meeting room, which opens many short sessions.
+- get_room_manager: the live rooms (who is connected to which meeting).
 
-Called by: every router, through the `DbSession` and `CurrentUser` type aliases below.
-Tests replace get_db with a version pointing at a temporary database.
+Called by: every router, through the type aliases below (`DbSession`, `CurrentUser`, ...).
+Tests replace get_db and get_session_factory with versions using a temporary database.
 """
 
 from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+from starlette.requests import HTTPConnection
 
 from app.db import SessionLocal
 from app.models import User
+from app.realtime.room_manager import RoomManager
 from app.services.errors import UnavailableError
 
 # The seeded "logged-in" user (Alex Morgan). See docs/DECISIONS.md D-025.
@@ -53,3 +57,29 @@ def get_current_user(db: DbSession) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_session_factory() -> sessionmaker[Session]:
+    """The session factory itself, instead of one session.
+
+    A meeting room's WebSocket can stay open for an hour. Holding one session (and its
+    transaction) that long would be wasteful, so the room opens a short session for
+    each piece of database work instead.
+    """
+    return SessionLocal
+
+
+SessionFactory = Annotated[sessionmaker[Session], Depends(get_session_factory)]
+
+
+def get_room_manager(connection: HTTPConnection) -> RoomManager:
+    """The app's one RoomManager, created in main.py.
+
+    `HTTPConnection` is the shared parent of HTTP requests and WebSockets, so the same
+    dependency works for the room's WebSocket and for REST routes (e.g. ending a meeting).
+    """
+    room_manager: RoomManager = connection.app.state.room_manager
+    return room_manager
+
+
+LiveRooms = Annotated[RoomManager, Depends(get_room_manager)]

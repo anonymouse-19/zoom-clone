@@ -9,8 +9,9 @@ services/. Service errors become 403/404/409/503 in main.py's error handler.
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
+from starlette.concurrency import run_in_threadpool
 
-from app.deps import CurrentUser, DbSession
+from app.deps import CurrentUser, DbSession, LiveRooms
 from app.models.types import utc_now
 from app.routers.params import MeetingCode
 from app.schemas.chat import ChatMessageOut
@@ -128,9 +129,18 @@ def start_meeting(db: DbSession, user: CurrentUser, meeting_code: MeetingCode) -
     response_model=MeetingDetail,
     responses={**FORBIDDEN, **NOT_FOUND, **CONFLICT},
 )
-def end_meeting(db: DbSession, user: CurrentUser, meeting_code: MeetingCode) -> MeetingDetail:
-    meeting = meeting_service.end_meeting(db, meeting_code, user)
-    return MeetingDetail.from_meeting(meeting)
+async def end_meeting(
+    db: DbSession, user: CurrentUser, room_manager: LiveRooms, meeting_code: MeetingCode
+) -> MeetingDetail:
+    """End the meeting for everyone, and hang up anyone still connected to its room.
+
+    `async` because hanging up WebSockets is async work. The blocking database work is
+    sent to a worker thread with run_in_threadpool (FastAPI does that by itself only
+    for plain `def` routes).
+    """
+    meeting = await run_in_threadpool(meeting_service.end_meeting, db, meeting_code, user)
+    await room_manager.end_room(meeting_code)
+    return await run_in_threadpool(MeetingDetail.from_meeting, meeting)
 
 
 @router.get(

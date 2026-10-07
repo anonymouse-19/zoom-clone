@@ -12,8 +12,10 @@
 
 "use client";
 
+import { ClipboardPaste } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/hooks/queries";
@@ -84,6 +86,27 @@ export function JoinForm({ isSharingScreen }: { isSharingScreen: boolean }) {
     }
   }
 
+  /**
+   * Read the clipboard (only when clicked, so the browser's permission prompt makes
+   * sense) and fill in the box if it holds a meeting ID or link.
+   */
+  async function pasteFromClipboard() {
+    let pasted = "";
+    try {
+      pasted = (await navigator.clipboard.readText()).trim();
+    } catch {
+      toast.error("The browser didn't allow reading the clipboard");
+      return;
+    }
+    if (!looksLikeJoinInput(pasted)) {
+      toast("There's no meeting ID or link on your clipboard");
+      return;
+    }
+    setJoinInput(formatTypedJoinInput(pasted));
+    setProblem(null);
+    setRequestError(null);
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -104,6 +127,14 @@ export function JoinForm({ isSharingScreen }: { isSharingScreen: boolean }) {
           className="h-11 rounded-lg border border-line px-3 text-base font-normal tracking-wide focus:border-zoom-blue focus:outline-none"
         />
       </label>
+
+      <button
+        type="button"
+        onClick={pasteFromClipboard}
+        className="-mt-3 flex items-center gap-1.5 self-start text-sm font-medium text-zoom-blue hover:underline"
+      >
+        <ClipboardPaste size={14} aria-hidden /> Paste meeting link from clipboard
+      </button>
 
       <div id="join-problem" aria-live="polite">
         {problem && !problem.you_are_host && (

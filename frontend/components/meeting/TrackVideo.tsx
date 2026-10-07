@@ -14,10 +14,19 @@ type TrackVideoProps = {
   track: MediaStreamTrack | null;
   /** Flip horizontally, like a mirror. Used only for your own camera. */
   isMirrored?: boolean;
+  /** "cover" fills the box (cameras); "contain" shows all of it (shared screens). */
+  fit?: "cover" | "contain";
   className?: string;
 };
 
-export function TrackVideo({ track, isMirrored = false, className = "" }: TrackVideoProps) {
+const FIT_CLASSES = { cover: "object-cover", contain: "object-contain" };
+
+export function TrackVideo({
+  track,
+  isMirrored = false,
+  fit = "cover",
+  className = "",
+}: TrackVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // A <video> plays a MediaStream, not a bare track, so wrap the track in one.
@@ -34,7 +43,7 @@ export function TrackVideo({ track, isMirrored = false, className = "" }: TrackV
       autoPlay
       playsInline
       muted
-      className={`h-full w-full object-cover ${isMirrored ? "-scale-x-100" : ""} ${className}`}
+      className={`h-full w-full ${FIT_CLASSES[fit]} ${isMirrored ? "-scale-x-100" : ""} ${className}`}
     />
   );
 }

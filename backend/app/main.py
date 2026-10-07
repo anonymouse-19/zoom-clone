@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.routers import health, meetings, participants, users
+from app.realtime.room_manager import RoomManager
+from app.routers import health, meetings, participants, room, users
 from app.seed import run_startup_seed
 from app.services.errors import (
     ConflictError,
@@ -27,6 +28,7 @@ from app.services.errors import (
 # Every REST route lives under /api so the API is easy to tell apart from WebSocket
 # routes (/ws/...) and easy to proxy as one block later.
 API_PREFIX = "/api"
+WEBSOCKET_PREFIX = "/ws"
 
 # Only the HTTP methods our API actually uses. An explicit list is easier to defend than
 # "*": anything we don't use is refused at the preflight step.
@@ -94,10 +96,16 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(ServiceError, handle_service_error)
 
+    # Who is connected to which meeting right now (in memory, one per app). Stored on
+    # app.state so routes reach it through deps.get_room_manager, and each test app
+    # gets its own empty one.
+    app.state.room_manager = RoomManager(reconnect_grace_seconds=settings.reconnect_grace_seconds)
+
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(users.router, prefix=API_PREFIX)
     app.include_router(meetings.router, prefix=API_PREFIX)
     app.include_router(participants.router, prefix=API_PREFIX)
+    app.include_router(room.router, prefix=WEBSOCKET_PREFIX)
 
     return app
 

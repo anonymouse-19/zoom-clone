@@ -250,29 +250,36 @@ def start_meeting(db: Session, meeting_code: str, user: User) -> Meeting:
 
 
 def end_meeting(db: Session, meeting_code: str, user: User) -> Meeting:
-    """Host ends the meeting for everyone."""
+    """Host ends the meeting for everyone (REST: the account that hosts it)."""
     meeting = get_meeting_by_code(db, meeting_code)
     require_host(meeting, user)
+    finish_meeting(db, meeting)
+    return meeting
+
+
+def finish_meeting(db: Session, meeting: Meeting) -> None:
+    """End a live meeting: everyone in it has left, anyone still waiting never got in.
+
+    Shared by end_meeting (REST, checks the host's account) and the meeting room (checks
+    the participant's in-meeting role, since a guest can be handed the host role).
+    """
     if meeting.status != MeetingStatus.LIVE:
         raise ConflictError("This meeting isn't in progress")
 
     now = utc_now()
-    _mark_everyone_left(meeting, now)
+    for participant in list(meeting.participants):
+        if participant.status == ParticipantStatus.ADMITTED:
+            participant.status = ParticipantStatus.LEFT
+            participant.left_at = now
+        elif participant.status == ParticipantStatus.WAITING:
+            # Never admitted, so never part of the meeting's attendance.
+            db.delete(participant)
     meeting.ended_at = now
     # A personal room goes back to idle so its permanent link keeps working.
     is_personal_room = meeting.type == MeetingType.PERSONAL
     meeting.status = MeetingStatus.SCHEDULED if is_personal_room else MeetingStatus.ENDED
     meeting.events.append(MeetingEvent(event_type=MeetingEventType.MEETING_ENDED, created_at=now))
     db.commit()
-    return meeting
-
-
-def _mark_everyone_left(meeting: Meeting, now: datetime) -> None:
-    still_present = (ParticipantStatus.WAITING, ParticipantStatus.ADMITTED)
-    for participant in meeting.participants:
-        if participant.status in still_present:
-            participant.status = ParticipantStatus.LEFT
-            participant.left_at = now
 
 
 # ---------------------------------------------------------------------------

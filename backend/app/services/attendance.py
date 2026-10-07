@@ -5,6 +5,16 @@ Called by: schemas/meeting.py (attendee counts in lists) and summary_service.py.
 """
 
 from app.models import Participant
+from app.models.enums import ParticipantStatus
+
+
+def attended(participants: list[Participant]) -> list[Participant]:
+    """The join sessions that actually got into the meeting.
+
+    Someone still in the waiting room hasn't attended (yet). Those who were denied, or
+    gave up while waiting, have no row at all (the meeting room deletes it).
+    """
+    return [p for p in participants if p.status != ParticipantStatus.WAITING]
 
 
 def person_key(participant: Participant) -> str:
@@ -20,4 +30,4 @@ def person_key(participant: Participant) -> str:
 
 def count_distinct_attendees(participants: list[Participant]) -> int:
     """How many different people joined, not how many join sessions there were."""
-    return len({person_key(participant) for participant in participants})
+    return len({person_key(participant) for participant in attended(participants)})

@@ -20,7 +20,14 @@ type DropdownProps = {
   triggerClassName?: string;
   /** Which edge of the trigger the menu lines up with. */
   align?: "left" | "right";
+  /** "above" for triggers near the bottom of the screen (the meeting toolbar). */
+  opens?: "below" | "above";
   children: ReactNode;
+};
+
+const MENU_POSITION_CLASSES = {
+  below: "top-full mt-2",
+  above: "bottom-full mb-2",
 };
 
 export function Dropdown({
@@ -28,6 +35,7 @@ export function Dropdown({
   triggerAriaLabel,
   triggerClassName = "",
   align = "right",
+  opens = "below",
   children,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -73,7 +81,7 @@ export function Dropdown({
       {isOpen && (
         <div
           role="menu"
-          className={`absolute top-full z-30 mt-2 min-w-56 rounded-xl border border-line bg-white py-2 text-sm text-ink shadow-lg ${
+          className={`absolute ${MENU_POSITION_CLASSES[opens]} z-30 min-w-56 rounded-xl border border-line bg-white py-2 text-sm text-ink shadow-lg ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

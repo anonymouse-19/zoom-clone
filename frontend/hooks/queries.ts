@@ -29,6 +29,7 @@ export const queryKeys = {
   meetings: (scope: api.MeetingScope) => ["meetings", scope] as const,
   meeting: (meetingCode: string) => ["meeting", meetingCode] as const,
   resolve: (joinInput: string) => ["resolve", joinInput] as const,
+  summary: (meetingCode: string) => ["summary", meetingCode] as const,
 };
 
 export function useCurrentUser() {
@@ -54,6 +55,14 @@ export function useMeeting(meetingCode: string, isEnabled = true) {
     queryKey: queryKeys.meeting(meetingCode),
     queryFn: () => api.getMeeting(meetingCode),
     enabled: isEnabled,
+  });
+}
+
+/** The post-meeting recap: attendance and chat (GET /api/meetings/{code}/summary). */
+export function useMeetingSummary(meetingCode: string) {
+  return useQuery({
+    queryKey: queryKeys.summary(meetingCode),
+    queryFn: () => api.getMeetingSummary(meetingCode),
   });
 }
 
